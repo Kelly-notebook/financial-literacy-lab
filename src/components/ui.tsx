@@ -45,6 +45,7 @@ export function Field({
   min = 0,
   max = 1e12,
   step = "any",
+  validateOnBlur = false,
 }: {
   form: Form;
   name: string;
@@ -53,8 +54,11 @@ export function Field({
   min?: number;
   max?: number;
   step?: number | string;
+  validateOnBlur?: boolean;
 }) {
   const id = useId();
+  const [focused, setFocused] = useState(false);
+  const [finished, setFinished] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
   const isMoney = unit === "元";
@@ -80,10 +84,11 @@ export function Field({
       v < min ||
       v > max ||
       (step === 1 && !Number.isInteger(v));
+  const showError = invalid && (!validateOnBlur || (!focused && finished));
   return (
     <label className="field" htmlFor={id}>
       <span>{label}</span>
-      <div className={`input-wrap ${invalid ? "invalid" : ""}`}>
+      <div className={`input-wrap ${showError ? "invalid" : ""}`}>
         <input
           id={id}
           aria-label={label}
@@ -106,14 +111,30 @@ export function Field({
               form.set(name, edit.text);
             } else form.set(name, e.target.value);
           }}
-          aria-invalid={invalid}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            setFinished(true);
+            if (validateOnBlur && form.values[name]?.trim() === "")
+              form.set(name, "0");
+          }}
+          onKeyDown={(e) => {
+            if (validateOnBlur && e.key === "Enter") e.currentTarget.blur();
+          }}
+          aria-invalid={showError}
+          aria-describedby={showError ? `${id}-error` : undefined}
         />
         <span>{unit}</span>
       </div>
-      {invalid && (
-        <small className="field-error">
+      {showError && (
+        <small
+          id={`${id}-error`}
+          className="field-error"
+          role={validateOnBlur ? "alert" : undefined}
+        >
           請輸入 {money(min)}～{money(max)}
           {step === 1 ? " 的整數" : ""}
+          {validateOnBlur && "；試算暫用最近一次有效金額，請修正此欄位。"}
         </small>
       )}
     </label>

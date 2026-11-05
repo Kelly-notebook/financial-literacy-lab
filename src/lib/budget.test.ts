@@ -204,7 +204,7 @@ describe("大型購買與分類", () => {
     expect(purchaseGoal(300000, 60000, 24, 8000)).toEqual({
       gap: 240000,
       required: 10000,
-      monthsToGoal: 30,
+      monthsToGoal: 24,
     }));
   it("固定比較金額不重複扣款", () => {
     expect(budget({ ...base, purchaseMonthly: 50000 }).remaining).toBe(
@@ -217,7 +217,7 @@ describe("大型購買與分類", () => {
       required: 0,
       monthsToGoal: 0,
     });
-    expect(purchaseGoal(100, 0, 12, 0).monthsToGoal).toBeNull();
+    expect(purchaseGoal(100, 0, 12, 0, "monthly").monthsToGoal).toBeNull();
   });
   it("期限後停止目標儲蓄，開始扣選填持有成本", () => {
     const p = { ...base, purchaseCost: 3000 };

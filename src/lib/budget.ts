@@ -24,7 +24,20 @@ export function switchIncome(input: Income, mode: Income["mode"]): Income {
   );
   return { ...input, mode, annualBonus: bonus, salary: (annual - bonus) / 12 };
 }
+export const separateExpenseKeys = [
+  "telecom",
+  "subscriptions",
+  "clothing",
+  "dining",
+  "parentSupport",
+  "medical",
+] as const;
 export interface BudgetInput extends Income {
+  clothing?: number;
+  dining?: number;
+  parentSupport?: number;
+  medical?: number;
+  purchaseMode?: "deadline" | "monthly";
   otherIncome: number;
   investmentCash: number;
   cashTreatment: "exclude" | "spend" | "reinvest";
@@ -76,29 +89,47 @@ export function purchaseGoal(
   fund: number,
   months: number,
   fixedMonthly: number,
+  mode: "deadline" | "monthly" = "deadline",
 ) {
   bounded(price, "購買總金額");
   bounded(fund, "已準備基金");
-  bounded(fixedMonthly, "固定目標儲蓄");
-  monthInteger(months, "購買期限");
+  if (mode === "deadline") monthInteger(months, "購買期限");
+  else bounded(fixedMonthly, "每月購物儲蓄");
   const gap = Math.max(0, price - fund);
-  return {
-    gap,
-    required: gap / months,
-    monthsToGoal:
-      gap === 0 ? 0 : fixedMonthly > 0 ? Math.ceil(gap / fixedMonthly) : null,
-  };
+  const required =
+    gap === 0
+      ? 0
+      : mode === "deadline"
+        ? Math.ceil(gap / months)
+        : fixedMonthly;
+  const estimated =
+    gap === 0 ? 0 : required > 0 ? Math.ceil(gap / required) : null;
+  const monthsToGoal =
+    estimated !== null && Number.isSafeInteger(estimated) ? estimated : null;
+  return { gap, required, monthsToGoal };
+}
+export function purchaseDuration(months: number | null) {
+  return months === null
+    ? "無法估算達標時間"
+    : months === 0
+      ? "目前資金已達標"
+      : `預計 ${Math.floor(months / 12)} 年 ${months % 12} 個月後達標`;
 }
 export function budget(input: BudgetInput, month = 1) {
   const annualEmployment = employmentAnnual(input);
   for (const [label, v] of Object.entries(input))
     if (
       typeof v === "number" &&
-      !["salary", "annualBonus", "annualIncome"].includes(label)
+      ![
+        "salary",
+        "annualBonus",
+        "annualIncome",
+        "purchaseMonths",
+        "purchaseMonthly",
+      ].includes(label)
     )
       bounded(v, label);
 
-  monthInteger(input.purchaseMonths, "購買期限");
   monthInteger(input.travelMonths, "旅行間隔");
   input.loans.forEach((l) => {
     bounded(l.payment, "貸款月付");
@@ -115,7 +146,9 @@ export function budget(input: BudgetInput, month = 1) {
     ? input.change!.employmentMonthly
     : annualEmployment / 12;
   const baseLiving = changed ? input.change!.living : input.living;
-  const living = baseLiving + input.telecom + input.subscriptions;
+  const living =
+    baseLiving +
+    separateExpenseKeys.reduce((sum, key) => sum + (input[key] ?? 0), 0);
   const cashMonthly =
     input.cashTreatment === "spend" ? input.investmentCash / 12 : 0;
   const income = employmentMonthly + input.otherIncome + cashMonthly;
@@ -128,9 +161,17 @@ export function budget(input: BudgetInput, month = 1) {
     input.purchaseFund,
     input.purchaseMonths,
     input.purchaseMonthly,
+    input.purchaseMode,
   );
-  const purchase = month <= input.purchaseMonths ? goal.required : 0;
-  const purchaseCost = month > input.purchaseMonths ? input.purchaseCost : 0;
+  // Stop when the fund is ready; the final payment cannot exceed the remaining gap.
+  const purchase = Math.max(
+    0,
+    Math.min(goal.required, goal.gap - goal.required * (month - 1)),
+  );
+  const purchaseAt =
+    input.purchaseMode === "monthly" ? goal.monthsToGoal : input.purchaseMonths;
+  const purchaseCost =
+    purchaseAt !== null && month > purchaseAt ? input.purchaseCost : 0;
   // The initial travel fund is spent on the first cycle only; later trips need full funding.
   const travel =
     month <= input.travelMonths
@@ -156,6 +197,10 @@ export function budget(input: BudgetInput, month = 1) {
     loan,
     purchase,
     purchaseCost,
+    purchaseAffordable: Math.max(
+      0,
+      income - living - loan - purchaseCost - travel - input.saving - etf,
+    ),
     travel,
     available,
     beforeEtf,

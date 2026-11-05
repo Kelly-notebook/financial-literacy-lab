@@ -94,7 +94,7 @@ test("退休策略切換、圖表與明細", async ({ page }) => {
     ),
   ).toBe(true);
 });
-test("輸入財務資料不發出外部請求或寫入儲存", async ({ page }) => {
+test("家庭資料僅本機暫存，不發出外部財務請求", async ({ page }) => {
   const external: string[] = [];
   page.on("request", (r) => {
     if (
@@ -116,9 +116,11 @@ test("輸入財務資料不發出外部請求或寫入儲存", async ({ page }) 
   expect(external).toEqual([]);
   expect(
     await page.evaluate(() => ({
-      local: localStorage.length,
+      salary: JSON.parse(
+        localStorage.getItem("financial-literacy-lab:household:v1")!,
+      ).values.salary,
       session: sessionStorage.length,
       query: location.search,
     })),
-  ).toEqual({ local: 0, session: 0, query: "" });
+  ).toEqual({ salary: "98765", session: 0, query: "" });
 });

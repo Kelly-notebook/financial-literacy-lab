@@ -1,8 +1,11 @@
+import { useRef } from "react";
+import { useBudgetForm } from "../hooks/useBudgetForm";
 import { money as formatMoney } from "../lib/finance";
 import {
   budget,
   forecast,
   annualForecast,
+  purchaseDuration,
   currentTaipeiMonth,
   switchIncome,
   type BudgetInput,
@@ -18,9 +21,9 @@ import {
 import {
   HouseholdHealth,
   BudgetReferences,
+  FinancialSafety,
 } from "../components/HouseholdHealth";
 import {
-  useForm,
   Field,
   Select,
   Details,
@@ -39,8 +42,10 @@ const loanFields = [
   ["credit", "creditMonths", "信貸"],
   ["otherLoan", "otherMonths", "其他貸款"],
 ];
-export default function Budget() {
-  const f = useForm({
+export default function Budget({
+  onOpenRetirement,
+}: { onOpenRetirement?: () => void } = {}) {
+  const f = useBudgetForm({
     mode: "monthly",
     salary: "",
     annualBonus: "0",
@@ -76,6 +81,13 @@ export default function Budget() {
     etfMonthly: "0",
     telecom: "0",
     subscriptions: "0",
+    clothing: "0",
+    dining: "0",
+    parentSupport: "0",
+    medical: "0",
+    purchaseMode: "deadline",
+    group_purchase: "wants",
+    retirementConfirmed: "no",
     emergencyConfirmed: "no",
     ...Object.fromEntries(
       Object.entries(detailLimits).map(([id, limit]) => [
@@ -150,6 +162,7 @@ export default function Budget() {
       cashTreatment: f.values.cashTreatment as BudgetInput["cashTreatment"],
       living,
       loans: loanFields.map(([p, m]) => ({ payment: f.n(p), months: f.n(m) })),
+      purchaseMode: f.values.purchaseMode as "deadline" | "monthly",
       purchasePrice: f.n("purchasePrice"),
       purchaseFund: f.n("purchaseFund"),
       purchaseMonths: f.n("purchaseMonths"),
@@ -158,9 +171,13 @@ export default function Budget() {
       travelPrice: f.n("travelPrice"),
       travelFund: f.n("travelFund"),
       travelMonths: f.n("travelMonths"),
-      etfMonthly: f.n("etfMonthly"),
+      etfMonthly: f.etfForCalculation,
       telecom: f.n("telecom"),
       subscriptions: f.n("subscriptions"),
+      clothing: f.n("clothing"),
+      dining: f.n("dining"),
+      parentSupport: f.n("parentSupport"),
+      medical: f.n("medical"),
       saving: f.n("saving"),
       startMonth: f.values.startMonth,
       change:
@@ -195,7 +212,9 @@ export default function Budget() {
       annualIncome: year.reduce((s, x) => s + x.income, 0),
     };
   });
-  const r = result.data;
+  const lastValid = useRef<typeof result.data>(undefined);
+  if (result.data) lastValid.current = result.data;
+  const r = result.data ?? lastValid.current;
   const c = r?.current;
   return (
     <div className="workspace budget-workspace">
@@ -204,6 +223,24 @@ export default function Budget() {
           <span className="eyebrow">LIFE IN BALANCE</span>
           <h2>家庭財務與生活目標規劃</h2>
           <p>先看日常餘裕，再安排目標與未來。</p>
+        </div>
+        <div className="storage-notice">
+          <p>
+            家庭資料只暫存於目前的瀏覽器，不上傳伺服器或
+            GitHub。共用裝置使用後可清除。
+          </p>
+          <p>
+            只保存合理值，未完成輸入不覆蓋上次有效資料。清除會重設表單；再次編輯才重新暫存。
+          </p>
+          <p role="status">{f.storageStatus}</p>
+          <button
+            onClick={() => {
+              lastValid.current = undefined;
+              f.clearSaved();
+            }}
+          >
+            清除已儲存資料
+          </button>
         </div>
         <Select
           form={f}
@@ -257,37 +294,63 @@ export default function Budget() {
             只填實際現金收入，不含股票未實現價差。股息不保證且可能變動；平均月額不代表每月都有配息，再投入與可支配現金不可重複計入。
           </p>
         </Details>
-        <Select
-          form={f}
-          name="livingMode"
-          label="必要生活費輸入方式"
-          options={[
-            ["total", "快速輸入總額"],
-            ["detail", "展開生活費明細"],
-          ]}
-        />
-        {f.values.livingMode === "total" ? (
-          <Field
+        <fieldset className="expense-section">
+          <legend>必要生活費與其他生活支出</legend>
+          <Select
             form={f}
-            name="living"
-            label="每月生活費總額（不含貸款、電信與訂閱）"
+            name="livingMode"
+            label="必要生活費輸入方式"
+            options={[
+              ["total", "快速輸入總額"],
+              ["detail", "展開生活費明細"],
+            ]}
           />
-        ) : (
+          {f.values.livingMode === "detail" && (
+            <div className="field-grid">
+              {livingFields
+                .filter((x) =>
+                  [
+                    "food",
+                    "child",
+                    "insurance",
+                    "transport",
+                    "utilities",
+                  ].includes(x.id),
+                )
+                .map(({ id, name }) => (
+                  <Field key={id} form={f} name={id} label={name} />
+                ))}
+            </div>
+          )}
           <div className="field-grid">
-            {livingFields
-              .filter((x) => x.id !== "telecom" && x.id !== "subscriptions")
-              .map(({ id, name }) => (
-                <Field key={id} form={f} name={id} label={name} />
-              ))}
+            <Field form={f} name="medical" label="醫藥費" />
+            <Field form={f} name="telecom" label="電信費" />
           </div>
-        )}
-        <div className="field-grid">
-          <Field form={f} name="telecom" label="電信費" />
-          <Field form={f} name="subscriptions" label="工具與娛樂訂閱" />
-        </div>
-        <p className="hint">
-          電信與訂閱另外填入，不要再包含在生活費總額或其他生活支出，以免重複計入。總額與明細仍擇一。
-        </p>
+          {f.values.livingMode === "total" ? (
+            <Field
+              form={f}
+              name="living"
+              label="其他生活支出總額（含伙食等，獨立項目另填）"
+            />
+          ) : (
+            <Field form={f} name="otherLiving" label="其他生活支出" />
+          )}
+          <p className="hint">
+            總額與伙食等明細擇一。醫藥、電信及下方非必要消費另填，勿再包含於總額。其他生活支出若含非必要消費，可在健檢調整分類。
+          </p>
+        </fieldset>
+        <fieldset className="expense-section">
+          <legend>非必要消費（可依用途調整）</legend>
+          <div className="field-grid">
+            <Field form={f} name="clothing" label="治裝費" />
+            <Field form={f} name="dining" label="餐廳與日常娛樂" />
+            <Field form={f} name="parentSupport" label="孝親費" />
+            <Field form={f} name="subscriptions" label="工具與娛樂訂閱" />
+          </div>
+          <p className="hint">
+            工作必需服裝或必要扶養費可改歸必要支出；健檢分類可由你調整。伙食與餐廳／娛樂請分開填寫，避免同一筆餐費填兩次。
+          </p>
+        </fieldset>
         <Details title="貸款設定：房貸、車貸、信貸、其他">
           {loanFields.map(([p, m, label]) => (
             <div className="field-grid" key={p}>
@@ -316,8 +379,18 @@ export default function Budget() {
               onChange={(e) => f.set("purchaseName", e.target.value)}
             />
           </label>
+          <Select
+            form={f}
+            name="purchaseMode"
+            label="大型購買規劃模式"
+            options={[
+              ["deadline", "模式 A：指定購買時間"],
+              ["monthly", "模式 B：指定每月儲蓄金額"],
+            ]}
+          />
           <Field form={f} name="purchasePrice" label="預計購買總金額" />
-          <div className="field-grid">
+          <Field form={f} name="purchaseFund" label="已準備的購買基金" />
+          {f.values.purchaseMode === "deadline" ? (
             <Field
               form={f}
               name="purchaseMonths"
@@ -327,16 +400,22 @@ export default function Budget() {
               max={600}
               step={1}
             />
-            <Field form={f} name="purchaseFund" label="已準備的購買基金" />
-          </div>
-          <Field
+          ) : (
+            <Field form={f} name="purchaseMonthly" label="每月能存多少錢" />
+          )}
+          <Select
             form={f}
-            name="purchaseMonthly"
-            label="目前固定目標儲蓄（比較用）"
+            name="group_purchase"
+            label="大型購物目標用途"
+            options={[
+              ["wants", "非必要消費（如興趣鋼琴）"],
+              ["needs", "必要用途（如工作必需設備）"],
+              ["savings", "長期資產累積（如購屋頭期款）"],
+            ]}
           />
           <Field form={f} name="purchaseCost" label="購入後每月額外持有成本" />
           <p className="hint">
-            可填汽車、鋼琴、家電或購屋基金。月預算依期限所需儲蓄扣除；固定儲蓄僅比較達標時間，不再重複扣款。購屋目前僅處理資金儲蓄，不估算核貸或購屋能力。
+            依最終用途分類，不因錢存入銀行就一律當成儲蓄目標。購屋僅處理頭期款資金，不估算核貸能力。未計利息、通膨與商品價格變動；達標後停止月存，最後一期最多存入尚缺金額。
           </p>
           <h3>旅行與其他儲蓄</h3>
           <Field form={f} name="travelPrice" label="每次旅行預算" />
@@ -404,7 +483,10 @@ export default function Budget() {
           </p>
         </Details>
         <Actions
-          reset={f.reset}
+          reset={() => {
+            lastValid.current = undefined;
+            f.reset();
+          }}
           summary={
             c
               ? `家庭規劃：${c.period} 月平均收入 ${money(c.income)} 元，月可支配 ${money(c.remaining)} 元，日平均 ${money(c.daily)} 元（本月${c.days}天）。ETF目標 ${money(c.etfTarget)} 元，計畫投入 ${money(c.etf)} 元。僅為情境試算。`
@@ -414,11 +496,18 @@ export default function Budget() {
       </section>
       <section className="results" aria-label="家庭預算結果">
         <ErrorNotice message={result.error} />
+        {result.error && r && (
+          <p className="hint">
+            輸入尚待修正，畫面暫沿用最近一次有效試算；欄位與圖表均保留。
+          </p>
+        )}
         {!r && (
           <div className="panel empty">
             <span>01 / 從收入開始</span>
             <h2>先填入你的收入</h2>
-            <p>選擇月薪或年薪模式。資料只在瀏覽器試算，不保存也不上傳。</p>
+            <p>
+              選擇月薪或年薪模式。資料只在此瀏覽器暫存，可隨時清除，不會上傳。
+            </p>
           </div>
         )}
         {r && c && (
@@ -541,7 +630,6 @@ export default function Budget() {
             </Details>
             <HouseholdHealth
               form={f}
-              input={r.input}
               current={c}
               entries={r.entries}
               items={r.items}
@@ -557,16 +645,23 @@ export default function Budget() {
                   ["每月需要儲蓄", c.goal.required],
                 ]}
               />
-              <p className="hint">
-                希望 {r.input.purchaseMonths} 個月後購買；目前固定儲蓄 NT${" "}
-                {money(r.input.purchaseMonthly)}／月，
-                {c.goal.monthsToGoal === null
-                  ? "尚無法推算達標時間，請設定大於 0 的每月儲蓄。"
-                  : c.goal.monthsToGoal === 0
-                    ? "現有基金已足夠。"
-                    : `不計利息約 ${c.goal.monthsToGoal} 個月達標。`}
-                可在左側／上方「大型購買與旅行目標」修改。
+              <p className="goal-duration">
+                {purchaseDuration(c.goal.monthsToGoal)}
               </p>
+              <p className="hint">
+                {r.input.purchaseMode === "monthly"
+                  ? "依指定每月儲蓄推算，到達資金目標後視為可購買。"
+                  : "按指定期限反推月存，向上取整至元；持有成本於原定購買期限後計入。"}
+                本月大型購物實際預留 NT$ {money(c.purchase)}，旅遊基金另列 NT${" "}
+                {money(c.travel)}，不重複扣款。未計利息、通膨與商品價格變動。
+              </p>
+              {c.purchase > c.purchaseAffordable && (
+                <div className="note caution">
+                  大型購物月存超過扣除其他支出、目標與 ETF 後的可負擔額 NT${" "}
+                  {money(c.purchase - c.purchaseAffordable)}
+                  ，請調整期限、目標或其他分配。
+                </div>
+              )}
             </div>
             <Details title="試算假設與風險">
               <p>
@@ -574,16 +669,17 @@ export default function Budget() {
                 ＋年度獎金；年薪模式直接採全年總收入，不再另加獎金。為比較規劃，兩者均以月平均換算，不是實際逐月入帳預測。其他收入及支出以本次輸入為準。
               </p>
               <p>
-                旅行基金只抵減第一個旅行週期，後續完整預留；大型購買儲蓄於期限後停止，改計選填持有成本。ETF
+                旅行基金只抵減第一個旅行週期，後續完整預留；大型購物資金達標後停止月存，持有成本按所選模式的購買時點計入。ETF
                 以使用者金額完整扣除一次，超過負擔能力會警示而不自動降低。每期日平均依當月天數計算，赤字保持負值。
               </p>
               <p>
-                未納入自動調薪、通膨或年齡／退休情境；自訂變動不代表未來保證。沒有資產累積推算。完整購屋能力與相同總本金教育比較仍留待後續開發。資料不儲存、不傳送。
+                未納入自動調薪、通膨或年齡／退休情境；自訂變動不代表未來保證。沒有資產累積推算。完整購屋能力與相同總本金教育比較仍留待後續開發。家庭資料只在此瀏覽器暫存，可清除，不會傳送。
               </p>
             </Details>
           </>
         )}
         <BudgetReferences />
+        <FinancialSafety form={f} onOpenRetirement={onOpenRetirement} />
       </section>
     </div>
   );

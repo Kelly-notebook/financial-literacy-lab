@@ -148,14 +148,17 @@ test("大型購買基金、達標時間與投資現金收入只計入一次", as
   await ui.getByLabel("預計購買總金額").fill("300000");
   await ui.getByLabel("已準備的購買基金").fill("60000");
   await ui.getByLabel("預計幾個月後購買").fill("24");
-  await ui.getByLabel("目前固定目標儲蓄（比較用）").fill("8000");
+  await ui.getByLabel("大型購買規劃模式").selectOption("monthly");
+  await ui.getByLabel("每月能存多少錢").fill("8000");
   await expect(
     ui.getByRole("heading", { name: "鋼琴", exact: true }),
   ).toBeVisible();
   await expect(
     ui.getByText("每月需要儲蓄", { exact: true }).locator(".."),
-  ).toContainText("10,000");
-  await expect(ui.getByText(/不計利息約 30 個月達標/)).toBeVisible();
+  ).toContainText("8,000");
+  await expect(
+    ui.getByText("預計 2 年 6 個月後達標", { exact: true }),
+  ).toBeVisible();
   await ui.getByText("投資現金收入", { exact: true }).click();
   await ui.getByLabel("每年預估股息／投資現金收入").fill("120000");
   await ui.getByLabel("投資現金收入處理方式").selectOption("spend");
@@ -289,18 +292,14 @@ test("健檢提醒依序、緊急預備金不假定達標與四個原始來源",
   await ui.getByLabel("每月固定實領薪資").fill("100000");
   await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
   await expect(ui.locator('[data-kind="emergency"]')).toBeVisible();
-  await ui.getByLabel("我已自行確認緊急預備金安排").check();
+  await ui.getByLabel("我已準備 3～6 個月必要生活支出的緊急預備金。").check();
   await expect(ui.locator('[data-kind="planning"]')).toBeVisible();
   await ui.getByLabel("每月預計投入 ETF 金額").fill("100000");
   const kinds = await ui
     .locator(".investment-notices [data-kind]")
     .evaluateAll((es) => es.map((e) => e.getAttribute("data-kind")));
   expect(kinds).toEqual(["deficit", "affordability"]);
-  await ui.getByText("退休儲蓄與投資現金流說明", { exact: true }).click();
-  await expect(
-    ui.getByText(/Fidelity 的退休儲蓄參考目標為每年約稅前收入 15%/),
-  ).toBeVisible();
-  await expect(ui.getByText(/僅提供教育說明，不判定退休儲蓄/)).toBeVisible();
+  await expect(ui.getByRole("region", { name: "財務安全檢查" })).toBeVisible();
   await ui.getByText("理財參考依據與資料來源", { exact: true }).click();
   const refs = ui.locator(".reference-list");
   await expect(refs.getByRole("listitem")).toHaveCount(4);

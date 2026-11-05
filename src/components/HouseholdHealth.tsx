@@ -1,5 +1,5 @@
 import { money as formatMoney } from "../lib/finance";
-import type { BudgetInput, BudgetRow } from "../lib/budget";
+import type { BudgetRow } from "../lib/budget";
 import {
   healthCheck,
   investmentCheck,
@@ -29,13 +29,11 @@ const percent = (v: number | null) =>
     : `${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(v)}%`;
 export function HouseholdHealth({
   form: f,
-  input,
   current: c,
   entries,
   items,
 }: {
   form: Form;
-  input: BudgetInput;
   current: BudgetRow;
   entries: BudgetEntry[];
   items: Allocation[];
@@ -66,7 +64,12 @@ export function HouseholdHealth({
         )}
       </div>
       <h3>用金額，規劃 ETF 投入</h3>
-      <Field form={f} name="etfMonthly" label="每月預計投入 ETF 金額" />
+      <Field
+        validateOnBlur
+        form={f}
+        name="etfMonthly"
+        label="每月預計投入 ETF 金額"
+      />
       <button
         className="scenario-button"
         disabled={c.income <= 0}
@@ -100,27 +103,27 @@ export function HouseholdHealth({
           </p>
           <div className="health-groups">
             {h.groups.map((g) => (
-              <div className="health-group" key={g.id}>
+              <div
+                className={`health-group tone-${g.tone}`}
+                data-group={g.id}
+                data-tone={g.tone}
+                key={g.id}
+              >
                 <span>{g.name}</span>
                 <strong>{percent(g.ratio)}</strong>
                 <small>
                   {g.id === "savings" ? "參考目標" : "參考上限"} {g.reference}%
                 </small>
                 <p>本月指定 NT$ {money(g.value)}</p>
-                {g.ratio !== null && (
-                  <p>
-                    {g.id === "savings"
-                      ? g.ratio < g.reference
-                        ? "目前低於參考目標，可依家庭需求檢視；不代表必須增加股票投資。"
-                        : "目前已達此情境的參考目標，仍需考量目標期限與風險。"
-                      : g.ratio > g.reference
-                        ? "目前高於參考上限，可檢視用途與分類；不表示一定能削減。"
-                        : "目前在參考上限內，仍應依實際生活需求評估。"}
-                  </p>
-                )}
+                <p>{g.message}</p>
               </div>
             ))}
           </div>
+          <p className="reference-disclaimer">
+            50／30／20 是 CFPB 參考法則；儲蓄低於 10%
+            的黃色警戒是本站自訂教育性提醒，不是 CFPB
+            官方標準。若有赤字，應優先處理現金流，不能只看儲蓄比例。
+          </p>
           <p className="hint">
             各項只歸入一類。未分配的剩餘金錢不自動算已儲蓄；貸款本金與利息未拆分，暫依你選的分類整筆計一次，不能同時再加計本金為儲蓄。大型購買與旅行可分別調整分類。
           </p>
@@ -216,50 +219,14 @@ export function HouseholdHealth({
               </div>
             ))}
           </div>
-          <Toggle form={f} name="emergencyConfirmed">
-            我已自行確認緊急預備金安排
-          </Toggle>
           <p className="hint">
-            此勾選是你的確認，不是系統驗證存款已達標。緊急預備金一般參考目前歸類為必要支出的
-            3～6 個月：
+            不因 ETF 低於 10% 就判定不足，也不因高於 20% 就判定過多。必要支出
+            3～6 個月的一般緩衝參考為{" "}
             {h.emergencyMax > 0
               ? `NT$ ${money(h.emergencyMin)}～${money(h.emergencyMax)}`
               : "請先確認必要支出與分類"}
-            。沒有流動儲蓄資料時，不判定是否達標。
+            ，不是已驗證的存款達標判定。
           </p>
-          <p className="hint">
-            不因 ETF 比例低於 10% 就判定不足，也不因高於 20%
-            就判定過多；投入比例 {percent(c.etfRatio)}
-            ，仍需連結長期規劃與風險承受能力。
-          </p>
-          <Details title="退休儲蓄與投資現金流說明">
-            <p>
-              Fidelity 的退休儲蓄參考目標為每年約稅前收入
-              15%，包含符合條件的雇主退休金提撥。它不等於每個人應拿 15% 薪水購買
-              ETF，也不能和稅後基準的 50／30／20 比例相加。
-            </p>
-            <p>
-              此處沒有稅前收入、完整退休儲蓄及雇主提撥資料，因此僅提供教育說明，不判定退休儲蓄是否達標。
-            </p>
-            <Breakdown
-              decimals={2}
-              items={[
-                ["每年預估投資現金收入", input.investmentCash],
-                ["納入家庭預算的平均月額", c.cashMonthly],
-              ]}
-            />
-            <p>
-              目前選擇：
-              {
-                {
-                  exclude: "不納入預算",
-                  spend: "納入可支配預算",
-                  reinvest: "股息再投入，不列可支配現金",
-                }[input.cashTreatment]
-              }
-              。股息不保證且可能變動，平均月額不是實際配息月份；未實現價差不算家庭收入，不把再投入股息重複算成可花現金。
-            </p>
-          </Details>
         </>
       )}
     </Details>
@@ -292,5 +259,49 @@ export function BudgetReferences() {
         本站提供理財教育與情境試算，非個人化投資建議。實際財務規劃應考量家庭結構、收入穩定性、負債、風險承受能力與退休制度。
       </p>
     </Details>
+  );
+}
+
+export function FinancialSafety({
+  form: f,
+  onOpenRetirement,
+}: {
+  form: Form;
+  onOpenRetirement?: () => void;
+}) {
+  return (
+    <section className="panel financial-safety" aria-label="財務安全檢查">
+      <h3>財務安全檢查</h3>
+      <Toggle form={f} name="emergencyConfirmed">
+        我已準備 3～6 個月必要生活支出的緊急預備金。
+      </Toggle>
+      {f.values.emergencyConfirmed !== "yes" && (
+        <p className="hint">
+          可先檢視並逐步建立財務緩衝，再考慮提高 ETF
+          投資金額；未勾選不表示財務不健康。
+        </p>
+      )}
+      <Toggle form={f} name="retirementConfirmed">
+        我已有退休理財規劃，並定期檢視。
+      </Toggle>
+      {f.values.retirementConfirmed !== "yes" && (
+        <p className="hint">
+          可在適合的時間整理退休目標，之後定期檢視；這是溫和提醒，不作退休達標判定。
+        </p>
+      )}
+      <a
+        href="#retirement"
+        onClick={(e) => {
+          e.preventDefault();
+          onOpenRetirement?.();
+        }}
+      >
+        前往第四單元：退休提領模擬器
+      </a>
+      <p className="hint">
+        兩項勾選只用於自我提醒，均不影響收支金額、ETF 投入或 50／30／20
+        計算。已勾選不代表經過驗證的財務安全評估；狀態只隨此瀏覽器的家庭暫存保存。
+      </p>
+    </section>
   );
 }

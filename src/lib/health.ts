@@ -1,5 +1,9 @@
 import { bounded } from "./finance";
-import type { BudgetInput, BudgetRow } from "./budget";
+import {
+  separateExpenseKeys,
+  type BudgetInput,
+  type BudgetRow,
+} from "./budget";
 export type Group = "needs" | "wants" | "savings";
 export const groupNames: Record<Group, string> = {
   needs: "必要支出",
@@ -20,6 +24,10 @@ export const livingFields = [
     group: "wants",
     cap: 5,
   },
+  { id: "clothing", name: "治裝費", color: "#af91a8", group: "wants" },
+  { id: "dining", name: "餐廳與日常娛樂", color: "#d2aa8c", group: "wants" },
+  { id: "parentSupport", name: "孝親費", color: "#a6a1c1", group: "wants" },
+  { id: "medical", name: "醫藥費", color: "#82aaa3", group: "needs" },
   { id: "otherLiving", name: "其他生活支出", color: "#91a38b", group: "needs" },
 ] as const;
 export const detailLimits = {
@@ -51,7 +59,9 @@ export function budgetEntries(
 ): BudgetEntry[] {
   const living: BudgetEntry[] = details
     ? livingFields
-        .filter((x) => x.id !== "telecom" && x.id !== "subscriptions")
+        .filter(
+          (x) => !(separateExpenseKeys as readonly string[]).includes(x.id),
+        )
         .map((x) => ({
           ...x,
           value: bounded(details[x.id as keyof LivingDetails], x.name),
@@ -67,20 +77,12 @@ export function budgetEntries(
       ];
   return [
     ...living,
-    {
-      id: "telecom",
-      name: "電信費",
-      value: input.telecom,
-      color: "#9b9ac3",
-      group: "needs",
-    },
-    {
-      id: "subscriptions",
-      name: "工具與娛樂訂閱",
-      value: input.subscriptions,
-      color: "#c397a6",
-      group: "wants",
-    },
+    ...livingFields
+      .filter((x) => (separateExpenseKeys as readonly string[]).includes(x.id))
+      .map((x) => ({
+        ...x,
+        value: input[x.id as (typeof separateExpenseKeys)[number]] ?? 0,
+      })),
     {
       id: "loans",
       name: "貸款（房貸、車貸、信貸等）",
@@ -97,14 +99,14 @@ export function budgetEntries(
     },
     {
       id: "purchase",
-      name: "大型購買目標儲蓄",
+      name: "大型購物儲蓄",
       value: row.purchase,
       color: "#c6ad77",
-      group: "savings",
+      group: "wants",
     },
     {
       id: "travel",
-      name: "旅行目標儲蓄",
+      name: "旅遊基金儲蓄",
       value: row.travel,
       color: "#c6ad77",
       group: "wants",
@@ -153,10 +155,14 @@ export function allocations(
       color: "#b48958",
     },
     {
-      name: "大型購買與旅行目標儲蓄",
-      value:
-        (byId.get("purchase")?.value ?? 0) + (byId.get("travel")?.value ?? 0),
+      name: "大型購物儲蓄",
+      value: byId.get("purchase")?.value ?? 0,
       color: "#c6ad77",
+    },
+    {
+      name: "旅遊基金儲蓄",
+      value: byId.get("travel")?.value ?? 0,
+      color: "#8fa9b5",
     },
     {
       name: "其他儲蓄",
@@ -193,6 +199,44 @@ export function detailComparison(
     annual: excess * 12,
   };
 }
+export function groupState(id: Group, ratio: number | null, deficit = false) {
+  if (ratio === null)
+    return { tone: "unknown", message: "沒有正的稅後收入，暫不判定比例狀態。" };
+  if (id !== "savings") {
+    const reference = id === "needs" ? 50 : 30;
+    const points = ratio - reference;
+    return points > 0
+      ? {
+          tone: "pink",
+          message: `超出參考值 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；請依家庭需求檢視，不表示一定能削減。`,
+        }
+      : {
+          tone: "normal",
+          message: "未超過此項參考上限，仍需依實際家庭需求檢視。",
+        };
+  }
+  if (ratio < 10)
+    return {
+      tone: "yellow",
+      message:
+        "低於本站 10% 教育性提醒門檻，可先檢視財務緩衝；不代表必須增加 ETF 投入。",
+    };
+  if (ratio < 20)
+    return {
+      tone: "watch",
+      message: "尚未達到 20% 參考目標，可依目標逐步規劃，不使用嚴重警示。",
+    };
+  return deficit
+    ? {
+        tone: "normal",
+        message:
+          "此項比例達到參考目標，但家庭仍有赤字，不能據此判定整體財務良好。",
+      }
+    : {
+        tone: "green",
+        message: "此項達到 20% 參考目標，不代表整體財務安全已經過驗證。",
+      };
+}
 export function healthCheck(
   entries: BudgetEntry[],
   income: number,
@@ -211,13 +255,19 @@ export function healthCheck(
     if (!Object.hasOwn(sums, group)) throw new Error("請選擇有效的支出分類");
     sums[group] += e.value;
   });
-  const groups = (["needs", "wants", "savings"] as const).map((id) => ({
-    id,
-    name: groupNames[id],
-    value: sums[id],
-    ratio: income > 0 ? (sums[id] / income) * 100 : null,
-    reference: { needs: 50, wants: 30, savings: 20 }[id],
-  }));
+  const total = sums.needs + sums.wants + sums.savings;
+  const cashDeficit = Math.max(0, total - income);
+  const groups = (["needs", "wants", "savings"] as const).map((id) => {
+    const ratio = income > 0 ? (sums[id] / income) * 100 : null;
+    return {
+      id,
+      name: groupNames[id],
+      value: sums[id],
+      ratio,
+      reference: { needs: 50, wants: 30, savings: 20 }[id],
+      ...groupState(id, ratio, cashDeficit > 0),
+    };
+  });
   const advice = entries
     .filter((e) => e.id in limits)
     .map((e) => ({
@@ -232,7 +282,8 @@ export function healthCheck(
   return {
     groups,
     advice,
-    total: sums.needs + sums.wants + sums.savings,
+    total,
+    cashDeficit,
     emergencyMin: sums.needs * 3,
     emergencyMax: sums.needs * 6,
   };
@@ -280,7 +331,7 @@ export const references = [
     institution: "Fidelity Investments",
     title: "How Much Should I Save for Retirement?",
     content:
-      "每年約稅前收入 15% 的退休儲蓄參考目標，包含符合條件的雇主退休金提撥；不是 ETF 最低投入比例。",
+      "退休規劃背景閱讀；功能三不作退休儲蓄比例或達標判定，詳細試算留在第四單元。",
     url: "https://www.fidelity.com/viewpoints/retirement/how-much-money-should-I-save",
   },
   {

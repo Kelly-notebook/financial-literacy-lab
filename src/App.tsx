@@ -97,7 +97,7 @@ export default function App() {
                 </button>
                 <div className="hero-footnote">
                   <ShieldCheck size={16} />
-                  所有試算都留在你的瀏覽器，不儲存個人資料。
+                  試算留在瀏覽器；家庭資料僅本機暫存，可隨時清除。
                 </div>
               </div>
               <div
@@ -211,7 +211,11 @@ export default function App() {
             </nav>
             {modules.map((m, i) => (
               <div key={m.title} hidden={page !== i}>
-                <m.component />
+                {i === 2 ? (
+                  <Budget onOpenRetirement={() => setPage(3)} />
+                ) : (
+                  <m.component />
+                )}
               </div>
             ))}
           </>
@@ -225,7 +229,9 @@ export default function App() {
         <p>
           僅供財務教育與情境試算，不構成投資建議。假設報酬不代表實際績效，也不保證退休安全。
         </p>
-        <span>以 NT$ 新臺幣試算 · 不串接即時行情 · 預設不保存輸入</span>
+        <span>
+          以 NT$ 新臺幣試算 · 不串接即時行情 · 家庭資料僅本機暫存，可清除
+        </span>
       </footer>
     </>
   );

@@ -1387,3 +1387,78 @@ h3:not(:first-child) {
     font-size: 11px;
   }
 }
+
+.storage-notice {
+  background: #edf3e8;
+  border: 1px solid #dce7d5;
+  padding: 13px;
+  border-radius: 9px;
+  margin-bottom: 22px;
+}
+.storage-notice p {
+  font-size: 10px;
+  margin: 0 0 8px;
+}
+.storage-notice button {
+  background: #fff;
+  border: 1px solid #c9d8c3;
+  border-radius: 6px;
+  color: #4a6a46;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.expense-section {
+  border: 0;
+  border-top: 1px solid #e0e7dc;
+  margin: 18px 0;
+  padding: 15px 0 0;
+  min-width: 0;
+}
+.expense-section legend {
+  font-size: 12px;
+  font-weight: 650;
+  padding-right: 10px;
+  color: #466244;
+}
+.health-group.tone-pink {
+  background: #fff0f3;
+  border-color: #e6b9c3;
+}
+.health-group.tone-pink > strong {
+  color: #a33e60;
+}
+.health-group.tone-yellow {
+  background: #fff8dc;
+  border-color: #e6d398;
+}
+.health-group.tone-yellow > strong {
+  color: #876b24;
+}
+.health-group.tone-watch {
+  background: #f7f7f0;
+}
+.health-group.tone-green {
+  background: #edf6ec;
+  border-color: #bcd5b9;
+}
+.health-group.tone-unknown {
+  background: #f4f5f2;
+}
+.financial-safety {
+  border-top: 1px solid #dfe7da;
+  padding-top: 12px;
+  margin-top: 26px;
+}
+.financial-safety .toggle {
+  align-items: flex-start;
+}
+.financial-safety a {
+  color: #397653;
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.goal-duration {
+  font-size: 18px;
+  font-weight: 650;
+  color: #32694c;
+}
