@@ -38,7 +38,9 @@ export interface BudgetInput extends Income {
   travelPrice: number;
   travelFund: number;
   travelMonths: number;
-  etfRatio: number;
+  etfMonthly: number;
+  telecom: number;
+  subscriptions: number;
   saving: number;
   startMonth: string;
   change?: { month: number; employmentMonthly: number; living: number };
@@ -95,7 +97,7 @@ export function budget(input: BudgetInput, month = 1) {
       !["salary", "annualBonus", "annualIncome"].includes(label)
     )
       bounded(v, label);
-  bounded(input.etfRatio, "ETF 比例", 0, 1);
+
   monthInteger(input.purchaseMonths, "購買期限");
   monthInteger(input.travelMonths, "旅行間隔");
   input.loans.forEach((l) => {
@@ -112,7 +114,8 @@ export function budget(input: BudgetInput, month = 1) {
   const employmentMonthly = changed
     ? input.change!.employmentMonthly
     : annualEmployment / 12;
-  const living = changed ? input.change!.living : input.living;
+  const baseLiving = changed ? input.change!.living : input.living;
+  const living = baseLiving + input.telecom + input.subscriptions;
   const cashMonthly =
     input.cashTreatment === "spend" ? input.investmentCash / 12 : 0;
   const income = employmentMonthly + input.otherIncome + cashMonthly;
@@ -135,9 +138,10 @@ export function budget(input: BudgetInput, month = 1) {
       : input.travelPrice / input.travelMonths;
   const available = income - living - loan - purchaseCost;
   const beforeEtf = available - purchase - travel - input.saving;
-  const etfTarget = income * input.etfRatio;
+  const etfTarget = input.etfMonthly;
   const etfAffordable = Math.max(0, beforeEtf);
-  const etf = Math.min(etfTarget, etfAffordable);
+  // A user-entered plan is deducted exactly once, even when unaffordable. Never hide its deficit.
+  const etf = etfTarget;
   const remaining = beforeEtf - etf;
   return {
     month,
@@ -148,6 +152,7 @@ export function budget(input: BudgetInput, month = 1) {
     employmentMonthly,
     cashMonthly,
     living,
+    baseLiving,
     loan,
     purchase,
     purchaseCost,
@@ -157,15 +162,14 @@ export function budget(input: BudgetInput, month = 1) {
     etfTarget,
     etfAffordable,
     etf,
-    etfGap: Math.max(0, etfTarget - etf),
+    etfGap: Math.max(0, etfTarget - etfAffordable),
     etfDaily: etfTarget / days,
+    etfRatio: income > 0 ? (etfTarget / income) * 100 : null,
     goals: purchase + travel + input.saving + etf,
     remaining,
     daily: remaining / days,
     deficit: Math.max(0, -remaining),
     goal,
-    emergencyMin: (living + loan + purchaseCost) * 6,
-    emergencyMax: (living + loan + purchaseCost) * 12,
   };
 }
 export type BudgetRow = ReturnType<typeof budget>;
@@ -193,51 +197,4 @@ export function annualForecast(rows: BudgetRow[]) {
       annualRemaining,
     };
   });
-}
-export interface Allocation {
-  name: string;
-  value: number;
-  color: string;
-}
-export function allocations(
-  input: BudgetInput,
-  row: BudgetRow,
-  livingParts?: { basic: number; family: number; transport: number },
-): Allocation[] {
-  const living = livingParts
-    ? [
-        { name: "基本生活支出", value: livingParts.basic, color: "#71917a" },
-        { name: "育兒與家庭支出", value: livingParts.family, color: "#a7bc94" },
-        {
-          name: "交通與其他必要支出",
-          value: livingParts.transport,
-          color: "#789ca4",
-        },
-      ]
-    : [{ name: "其他生活支出（總額）", value: row.living, color: "#71917a" }];
-  return [
-    {
-      name: "居住與貸款",
-      value: row.loan,
-      color: "#b48958",
-    },
-    ...living,
-    {
-      name: "其他必要支出（購入後成本）",
-      value: row.purchaseCost,
-      color: "#9b9980",
-    },
-    {
-      name: "旅遊及大型購買目標儲蓄",
-      value: row.purchase + row.travel,
-      color: "#c6ad77",
-    },
-    { name: "ETF 投資", value: row.etf, color: "#216b53" },
-    { name: "其他儲蓄", value: input.saving, color: "#9287a4" },
-    {
-      name: "剩餘可支配金額",
-      value: Math.max(0, row.remaining),
-      color: "#c8d9bf",
-    },
-  ].filter((x) => x.value > 0);
 }

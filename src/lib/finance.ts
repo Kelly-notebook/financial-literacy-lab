@@ -157,5 +157,7 @@ export function sequenceReturns(years: number) {
     (_, i) => [0.15, 0.08, 0.04, -0.05, -0.2][i % 5],
   );
 }
-export const money = (value: number) =>
-  new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 0 }).format(value);
+export const money = (value: number, decimals = 0) =>
+  new Intl.NumberFormat("zh-TW", { maximumFractionDigits: decimals }).format(
+    value,
+  );

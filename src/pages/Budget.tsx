@@ -1,15 +1,24 @@
-import { money } from "../lib/finance";
+import { money as formatMoney } from "../lib/finance";
 import {
   budget,
   forecast,
   annualForecast,
-  allocations,
   currentTaipeiMonth,
   switchIncome,
   type BudgetInput,
   type Income,
 } from "../lib/budget";
-import { CashFlowChart, AllocationChart } from "../components/BudgetCharts";
+import { CashFlowChart } from "../components/BudgetCharts";
+import {
+  budgetEntries,
+  allocations,
+  livingFields,
+  detailLimits,
+} from "../lib/health";
+import {
+  HouseholdHealth,
+  BudgetReferences,
+} from "../components/HouseholdHealth";
 import {
   useForm,
   Field,
@@ -23,6 +32,7 @@ import {
   Rows,
   Toggle,
 } from "../components/ui";
+const money = (value: number) => formatMoney(value, 2);
 const loanFields = [
   ["mortgage", "mortgageMonths", "房貸"],
   ["carLoan", "carLoanMonths", "車貸"],
@@ -63,7 +73,16 @@ export default function Budget() {
     travelPrice: "60000",
     travelFund: "0",
     travelMonths: "12",
-    etfRatio: "10",
+    etfMonthly: "0",
+    telecom: "0",
+    subscriptions: "0",
+    emergencyConfirmed: "no",
+    ...Object.fromEntries(
+      Object.entries(detailLimits).map(([id, limit]) => [
+        `limit_${id}`,
+        String(limit),
+      ]),
+    ),
     saving: "0",
     startMonth: currentTaipeiMonth(),
     forecastYears: "5",
@@ -72,7 +91,6 @@ export default function Budget() {
     changeMonth: "13",
     changeIncome: "50000",
     changeLiving: "15000",
-    savingCategory: "生活費",
   });
   const incomeInput = (): Income => ({
     mode: f.values.mode as Income["mode"],
@@ -97,9 +115,12 @@ export default function Budget() {
   const result = safely(() => {
     const details = f.values.livingMode === "detail";
     const parts = {
-      basic: f.n("food") + f.n("insurance") + f.n("utilities"),
-      family: f.n("child"),
-      transport: f.n("transport") + f.n("otherLiving"),
+      food: f.n("food"),
+      child: f.n("child"),
+      insurance: f.n("insurance"),
+      transport: f.n("transport"),
+      utilities: f.n("utilities"),
+      otherLiving: f.n("otherLiving"),
     };
     if (
       details &&
@@ -114,7 +135,7 @@ export default function Budget() {
     )
       throw new Error("生活費明細需為 0～1兆的有效金額");
     const living = details
-      ? parts.basic + parts.family + parts.transport
+      ? Object.values(parts).reduce((sum, v) => sum + v, 0)
       : f.n("living");
     if (
       !Number.isInteger(f.n("forecastYears")) ||
@@ -137,7 +158,9 @@ export default function Budget() {
       travelPrice: f.n("travelPrice"),
       travelFund: f.n("travelFund"),
       travelMonths: f.n("travelMonths"),
-      etfRatio: f.n("etfRatio") / 100,
+      etfMonthly: f.n("etfMonthly"),
+      telecom: f.n("telecom"),
+      subscriptions: f.n("subscriptions"),
       saving: f.n("saving"),
       startMonth: f.values.startMonth,
       change:
@@ -153,25 +176,21 @@ export default function Budget() {
       monthly = forecast(input, f.n("forecastYears") * 12),
       annual = annualForecast(monthly),
       year = forecast(input, 12),
-      items = allocations(
+      entries = budgetEntries(
         input,
         current,
         details && !(input.change && input.change.month === 1)
           ? parts
           : undefined,
       );
-    const eligible = items.filter((x) => x.name !== "剩餘可支配金額");
-    const selected =
-      eligible.find((x) => x.name === f.values.savingCategory) ??
-      eligible.find((x) => x.name.includes("生活")) ??
-      eligible[0];
+    const items = allocations(entries, current.remaining);
     return {
       input,
       current,
       monthly,
       annual,
       items,
-      selected,
+      entries,
       annualRemaining: year.reduce((s, x) => s + x.remaining, 0),
       annualIncome: year.reduce((s, x) => s + x.income, 0),
     };
@@ -213,6 +232,10 @@ export default function Budget() {
             ? "全年總收入 ÷ 12 為月平均，不會再次加計獎金，也不代表每月實際收到相同金額。"
             : "有年度獎金時，總收入及試算結果以月平均呈現；獎金 ÷ 12 只是規劃基準，不代表每月固定入帳。"}
         </p>
+        <p className="hint">
+          50／30／20
+          必須使用稅後可支配收入。若手邊資料是稅前年薪，請先扣除稅費，改填稅後收入；此處不自動推算所得稅。
+        </p>
         <Field form={f} name="otherIncome" label="其他每月固定收入" />
         <Details title="投資現金收入">
           <Field
@@ -244,21 +267,27 @@ export default function Budget() {
           ]}
         />
         {f.values.livingMode === "total" ? (
-          <Field form={f} name="living" label="每月必要生活費（不含貸款）" />
+          <Field
+            form={f}
+            name="living"
+            label="每月生活費總額（不含貸款、電信與訂閱）"
+          />
         ) : (
           <div className="field-grid">
-            {[
-              ["food", "伙食"],
-              ["child", "育兒與家庭"],
-              ["insurance", "保險"],
-              ["transport", "交通"],
-              ["utilities", "水電"],
-              ["otherLiving", "其他生活支出"],
-            ].map(([k, l]) => (
-              <Field key={k} form={f} name={k} label={l} />
-            ))}
+            {livingFields
+              .filter((x) => x.id !== "telecom" && x.id !== "subscriptions")
+              .map(({ id, name }) => (
+                <Field key={id} form={f} name={id} label={name} />
+              ))}
           </div>
         )}
+        <div className="field-grid">
+          <Field form={f} name="telecom" label="電信費" />
+          <Field form={f} name="subscriptions" label="工具與娛樂訂閱" />
+        </div>
+        <p className="hint">
+          電信與訂閱另外填入，不要再包含在生活費總額或其他生活支出，以免重複計入。總額與明細仍擇一。
+        </p>
         <Details title="貸款設定：房貸、車貸、信貸、其他">
           {loanFields.map(([p, m, label]) => (
             <div className="field-grid" key={p}>
@@ -366,7 +395,7 @@ export default function Budget() {
               <Field
                 form={f}
                 name="changeLiving"
-                label="變動後每月必要生活費"
+                label="變動後每月生活費（不含電信與訂閱）"
               />
             </>
           )}
@@ -378,7 +407,7 @@ export default function Budget() {
           reset={f.reset}
           summary={
             c
-              ? `家庭規劃：${c.period} 月平均收入 ${money(c.income)} 元，月可支配 ${money(c.remaining)} 元，日平均 ${money(c.daily)} 元（本月${c.days}天）。ETF目標 ${money(c.etfTarget)} 元，可負擔規劃 ${money(c.etf)} 元。僅為情境試算。`
+              ? `家庭規劃：${c.period} 月平均收入 ${money(c.income)} 元，月可支配 ${money(c.remaining)} 元，日平均 ${money(c.daily)} 元（本月${c.days}天）。ETF目標 ${money(c.etfTarget)} 元，計畫投入 ${money(c.etf)} 元。僅為情境試算。`
               : ""
           }
         />
@@ -396,31 +425,40 @@ export default function Budget() {
           <>
             <div className={`hero-result ${c.deficit ? "warning-result" : ""}`}>
               <span className="result-badge">01 / 現在的生活餘裕</span>
-              <Stat label="每日平均可支配金額" value={c.daily} />
+              <Stat decimals={2} label="每日平均可支配金額" value={c.daily} />
               <p>
                 {c.period} 共 {c.days} 天：每月可支配金額 ÷ {c.days}
                 。月平均收入不等於實際入帳時間，亦非帳戶餘額。
               </p>
               <div className="hero-stats">
                 <Stat small label="每月總收入（月平均）" value={c.income} />
-                <Stat small label="每月剩餘可支配金額" value={c.remaining} />
+                <Stat
+                  decimals={2}
+                  small
+                  label="每月剩餘可支配金額"
+                  value={c.remaining}
+                />
               </div>
               {c.deficit > 0 && (
                 <div className="deficit-banner" role="status">
                   每月預算缺口 NT$ {money(c.deficit)}
                   ；負值保留，請調整支出、目標期限或收入假設。此時 ETF
-                  規劃投入為 0。
+                  計畫投入仍完整扣除，請檢視是否需要調整。
                 </div>
               )}
             </div>
             <div className="panel">
               <h3>收入與支出，一起看清楚</h3>
               <Breakdown
+                decimals={2}
                 items={[
                   ["工作收入（月平均，含獎金）", c.employmentMonthly],
                   ["其他每月固定收入", r.input.otherIncome],
                   ["投資現金收入（月平均，僅計納入部分）", c.cashMonthly],
-                  ["每月必要支出（含購入後成本）", c.living + c.purchaseCost],
+                  [
+                    "每月生活支出（含電信、訂閱與購入後成本）",
+                    c.living + c.purchaseCost,
+                  ],
                   ["每月貸款支出", c.loan],
                   ["每月目標儲蓄與投資", c.goals],
                   ["每月剩餘可支配金額", c.remaining],
@@ -500,47 +538,19 @@ export default function Budget() {
                   />
                 )}
               </Details>
-              <p className="hint">
-                緊急預備金參考（必要生活費與貸款 6～12 個月）：NT${" "}
-                {money(c.emergencyMin)}～{money(c.emergencyMax)}。
-              </p>
             </Details>
-            <Details title="家庭支出比例與配置分析">
-              <span className="eyebrow">03 / FIND YOUR BALANCE</span>
-              <h3>家庭收入都分配到哪裡？</h3>
-              <AllocationChart
-                items={r.items}
-                income={c.income}
-                deficit={c.deficit}
-              />
-              <h3>如果調整其中一項分配？</h3>
-              <Select
-                form={{
-                  ...f,
-                  values: {
-                    ...f.values,
-                    savingCategory: r.selected?.name ?? "",
-                  },
-                }}
-                name="savingCategory"
-                label="支出調整情境項目"
-                options={r.items
-                  .filter((x) => x.name !== "剩餘可支配金額")
-                  .map((x) => [x.name, x.name])}
-              />
-              {r.selected && (
-                <p>
-                  以「{r.selected.name}」NT$ {money(r.selected.value)}{" "}
-                  為例，降低 5% 可每月多留 NT$ {money(r.selected.value * 0.05)}
-                  ；降低 10% 可多留 NT$ {money(r.selected.value * 0.1)}
-                  。這是假設比較，不判定你的必要支出過高；貸款月付不能任意減少，若調整需另行評估契約與條件。
-                </p>
-              )}
-            </Details>
+            <HouseholdHealth
+              form={f}
+              input={r.input}
+              current={c}
+              entries={r.entries}
+              items={r.items}
+            />
             <div className="panel">
               <span className="eyebrow">04 / A GOAL WORTH PLANNING</span>
               <h3>{f.values.purchaseName || "大型購買目標"}</h3>
               <Breakdown
+                decimals={2}
                 items={[
                   ["預計購買總金額", r.input.purchasePrice],
                   ["已準備的購買基金", r.input.purchaseFund],
@@ -558,60 +568,6 @@ export default function Budget() {
                 可在左側／上方「大型購買與旅行目標」修改。
               </p>
             </div>
-            <div className="panel">
-              <span className="eyebrow">05 / INVEST WITH A PLAN</span>
-              <h3>設定自己的 ETF 投資目標</h3>
-              <Field
-                form={f}
-                name="etfRatio"
-                label="每月 ETF 投資目標比例"
-                unit="%"
-                max={100}
-              />
-              <p className="hint">
-                以本月總收入（月平均）為基準，預設 10%，允許
-                0%。這是你自行設定的目標，不是適合所有人的最低投資標準。0050
-                僅作教育案例，不串接即時股價。
-              </p>
-              <Breakdown
-                items={[
-                  ["比例對應的每月目標投入", c.etfTarget],
-                  ["目標的每日平均投入", c.etfDaily],
-                  ["其他支出與目標後的可負擔額", c.etfAffordable],
-                  ["本月 ETF 規劃投入（可負擔額為上限）", c.etf],
-                ]}
-              />
-              {c.etfGap > 0 ? (
-                <div className="note caution">
-                  投資目標超過可負擔額 NT$ {money(c.etfGap)}。
-                  {c.beforeEtf <= 0
-                    ? "家庭現金流已無餘裕，不建議強行投入；本月規劃投入為 0。"
-                    : "試算已限制投入金額，請自行調整目標或其他分配。"}
-                </div>
-              ) : (
-                <p className="hint">
-                  此情境下可負擔設定的投入目標；不代表投資風險適合你或報酬有保證。
-                </p>
-              )}
-              <h3>投資資產與現金流分開看</h3>
-              <Breakdown
-                items={[
-                  ["每年預估投資現金收入", r.input.investmentCash],
-                  ["納入家庭預算的平均月額", c.cashMonthly],
-                ]}
-              />
-              <p className="hint">
-                目前選擇：
-                {
-                  {
-                    exclude: "不納入預算",
-                    spend: "納入可支配預算",
-                    reinvest: "股息再投入，不列可支配現金",
-                  }[r.input.cashTreatment]
-                }
-                。股息可能變動且不保證，平均月額不是實際配息月份；未實現資本利得不算可花收入。此頁不模擬投資報酬，不與複利模組重複加計股息。
-              </p>
-            </div>
             <Details title="試算假設與風險">
               <p>
                 月薪模式的年度工作收入＝固定月薪 × 12
@@ -619,7 +575,7 @@ export default function Budget() {
               </p>
               <p>
                 旅行基金只抵減第一個旅行週期，後續完整預留；大型購買儲蓄於期限後停止，改計選填持有成本。ETF
-                以可負擔額為上限，缺口及實際投入另列。每期日平均依當月天數計算，赤字保持負值。
+                以使用者金額完整扣除一次，超過負擔能力會警示而不自動降低。每期日平均依當月天數計算，赤字保持負值。
               </p>
               <p>
                 未納入自動調薪、通膨或年齡／退休情境；自訂變動不代表未來保證。沒有資產累積推算。完整購屋能力與相同總本金教育比較仍留待後續開發。資料不儲存、不傳送。
@@ -627,6 +583,7 @@ export default function Budget() {
             </Details>
           </>
         )}
+        <BudgetReferences />
       </section>
     </div>
   );

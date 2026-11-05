@@ -12,8 +12,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { money } from "../lib/finance";
-import type { Allocation } from "../lib/budget";
+import { money as formatMoney } from "../lib/finance";
+import type { Allocation } from "../lib/health";
+const money = (value: number) => formatMoney(value, 2);
 export interface FlowPoint {
   period: string;
   remaining: number;
@@ -159,7 +160,11 @@ export function AllocationChart({
               <strong>
                 {money(item.value)} 元{" "}
                 <small>
-                  ({total > 0 ? ((item.value / total) * 100).toFixed(1) : "0"}%)
+                  (占收入{" "}
+                  {income > 0
+                    ? `${((item.value / income) * 100).toFixed(1)}%`
+                    : "無法計算"}
+                  )
                 </small>
               </strong>
             </li>
@@ -167,11 +172,13 @@ export function AllocationChart({
         </ul>
       </div>
       <p className="hint">
-        環圈分母為本月總分配 NT$ {money(total)}；本月收入 NT$ {money(income)}。
+        扇形依正向分配額繪製，總分配 NT$ {money(total)}；本月收入 NT${" "}
+        {money(income)}。
         {deficit > 0
           ? "支出已超過收入，缺口另列，不以負值切片或虛構收入平衡。"
           : "含剩餘可支配金額。"}
-        未填入的支出不另行假設分類。
+        圖例比例以稅後月收入為分母，超支時加總可能超過 100%；收入為 0
+        時不計比例。剩餘負值於圖下另列，未填入的支出不另行假設分類。其他生活支出包含選填的購入後額外持有成本。
       </p>
     </>
   );

@@ -244,29 +244,37 @@ export function Stat({
   value,
   unit = "元",
   small = false,
+  decimals = 0,
 }: {
   label: string;
   value: number;
   unit?: string;
   small?: boolean;
+  decimals?: number;
 }) {
   return (
     <div className={`stat ${small ? "small" : ""}`}>
       <span>{label}</span>
       <strong title={String(value)}>
-        {money(value)}
+        {money(value, decimals)}
         <em>{unit}</em>
       </strong>
     </div>
   );
 }
-export function Breakdown({ items }: { items: [string, number][] }) {
+export function Breakdown({
+  items,
+  decimals = 0,
+}: {
+  items: [string, number][];
+  decimals?: number;
+}) {
   return (
     <dl className="breakdown">
       {items.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>NT$ {money(value)}</dd>
+          <dd>NT$ {money(value, decimals)}</dd>
         </div>
       ))}
     </dl>

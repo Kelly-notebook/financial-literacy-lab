@@ -3,7 +3,6 @@ import {
   budget,
   forecast,
   annualForecast,
-  allocations,
   purchaseGoal,
   switchIncome,
   employmentAnnual,
@@ -11,6 +10,7 @@ import {
   currentTaipeiMonth,
   type BudgetInput,
 } from "./budget";
+import { allocations, budgetEntries } from "./health";
 export const base: BudgetInput = {
   mode: "monthly",
   salary: 50000,
@@ -29,7 +29,9 @@ export const base: BudgetInput = {
   travelPrice: 60000,
   travelFund: 0,
   travelMonths: 12,
-  etfRatio: 0.1,
+  etfMonthly: 5000,
+  telecom: 0,
+  subscriptions: 0,
   saving: 0,
   startMonth: "2026-11",
 };
@@ -92,7 +94,7 @@ describe("收入模式與年度對帳", () => {
       loans: [{ payment: 5000, months: 6 }],
       purchaseMonths: 6,
       purchasePrice: 60000,
-      etfRatio: 0,
+      etfMonthly: 0,
     };
     const rows = forecast(p, 12);
     expect(rows[5].loan).toBe(5000);
@@ -105,12 +107,12 @@ describe("收入模式與年度對帳", () => {
   });
 });
 describe("每期現金流、赤字與日平均", () => {
-  it("赤字保留負的月額及每日金額，ETF 不強制投入", () => {
+  it("赤字保留負的月額及每日金額，ETF 不自動降低", () => {
     const r = budget({ ...base, salary: 10000 });
-    expect(r.remaining).toBe(-20000);
-    expect(r.daily).toBeCloseTo(-20000 / 30);
-    expect(r.deficit).toBe(20000);
-    expect(r.etf).toBe(0);
+    expect(r.remaining).toBe(-25000);
+    expect(r.daily).toBeCloseTo(-25000 / 30);
+    expect(r.deficit).toBe(25000);
+    expect(r.etf).toBe(5000);
   });
   it("第24個月仍扣貸款，第25個月停止並重算每日金額", () => {
     const before = budget(base, 24),
@@ -153,7 +155,7 @@ describe("每期現金流、赤字與日平均", () => {
     const r = budget(p, 3);
     expect(r.income).toBe(80000);
     expect(r.living).toBe(25000);
-    expect(r.etfTarget).toBe(8000);
+    expect(r.etfTarget).toBe(5000);
     expect(r.daily).toBeCloseTo(r.remaining / 31);
   });
   it("年度摘要區分平均月額、期間總額、實際天數每日平均", () => {
@@ -174,27 +176,28 @@ describe("每期現金流、赤字與日平均", () => {
     expect(budget(p, 13).travel).toBe(5000);
   });
 });
-describe("ETF 比例及可負擔性", () => {
-  it.each([0, 0.1, 0.15, 0.2])("自行設定 %s 比例", (ratio) => {
-    const r = budget({ ...base, etfRatio: ratio });
-    expect(r.etfTarget).toBe(50000 * ratio);
-    expect(r.etf).toBe(r.etfTarget);
-    expect(r.etfDaily).toBeCloseTo(r.etfTarget / 30);
+describe("ETF 金額及可負擔性", () => {
+  it.each([0, 5000, 7500, 10000])("自行設定 %s 元只扣一次", (amount) => {
+    const r = budget({ ...base, etfMonthly: amount });
+    expect(r.etfTarget).toBe(amount);
+    expect(r.etf).toBe(amount);
+    expect(r.beforeEtf - r.remaining).toBe(amount);
+    expect(r.etfRatio).toBe((amount / 50000) * 100);
   });
-  it("超過負擔能力明示差額，規劃投入以可負擔額上限", () => {
-    const r = budget({ ...base, etfRatio: 1 });
+  it("超額金額不自動減少，保留真實負結餘", () => {
+    const r = budget({ ...base, etfMonthly: 50000 });
     expect(r.etfAffordable).toBe(20000);
-    expect(r.etf).toBe(20000);
+    expect(r.etf).toBe(50000);
     expect(r.etfGap).toBe(30000);
-    expect(r.remaining).toBe(0);
+    expect(r.remaining).toBe(-30000);
   });
-  it("零收入沒有最低投入標準", () => {
-    const r = budget({ ...base, salary: 0 });
-    expect(r.etf).toBe(0);
+  it("零收入不除以零，ETF為0也不判定不足", () => {
+    const r = budget({ ...base, salary: 0, etfMonthly: 0 });
+    expect(r.etfRatio).toBeNull();
     expect(r.remaining).toBeLessThan(0);
   });
-  it("拒絕超過100%比例", () =>
-    expect(() => budget({ ...base, etfRatio: 1.01 })).toThrow());
+  it("拒絕負的投資金額", () =>
+    expect(() => budget({ ...base, etfMonthly: -1 })).toThrow());
 });
 describe("大型購買與分類", () => {
   it("基金抵減、必要月存及固定存款達標時間", () =>
@@ -224,8 +227,8 @@ describe("大型購買與分類", () => {
   });
   it("生活費總額不虛構育兒與交通分類，環圈各項合計對帳", () => {
     const row = budget(base),
-      items = allocations(base, row);
-    expect(items.map((x) => x.name)).not.toContain("育兒與家庭支出");
+      items = allocations(budgetEntries(base, row), row.remaining);
+    expect(items.map((x) => x.name)).not.toContain("育兒與家庭");
     expect(items.find((x) => x.name === "其他生活支出（總額）")?.value).toBe(
       15000,
     );
@@ -234,7 +237,7 @@ describe("大型購買與分類", () => {
   it("赤字不放入環圈負值切片，總分配可大於收入", () => {
     const p = { ...base, salary: 10000 },
       row = budget(p),
-      items = allocations(p, row);
+      items = allocations(budgetEntries(p, row), row.remaining);
     expect(items.every((x) => x.value > 0)).toBe(true);
     expect(items.reduce((s, x) => s + x.value, 0)).toBe(
       row.income + row.deficit,
@@ -285,10 +288,12 @@ it.each([
 it("任意大型購買的持有成本不被虛構成房貸", () => {
   const p = { ...base, purchaseCost: 1000 };
   const row = budget(p, 61),
-    items = allocations(p, row);
+    items = allocations(budgetEntries(p, row), row.remaining);
+  expect(items.find((x) => x.name === "其他生活支出（總額）")?.value).toBe(
+    16000,
+  );
   expect(
-    items.find((x) => x.name === "其他必要支出（購入後成本）")?.value,
-  ).toBe(1000);
-  expect(items.find((x) => x.name === "居住與貸款")).toBeUndefined();
+    items.find((x) => x.name === "貸款（房貸、車貸、信貸等）"),
+  ).toBeUndefined();
   expect(items.reduce((sum, x) => sum + x.value, 0)).toBe(row.income);
 });

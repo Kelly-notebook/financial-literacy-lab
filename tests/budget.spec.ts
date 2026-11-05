@@ -97,10 +97,10 @@ test("貸款順序、逐月到期、各期每日值及年度單位", async ({ pa
   await expect(rows.filter({ hasText: "2026-12" })).toContainText("0");
   const november = rows.filter({ hasText: "2026-11" });
   const december = rows.filter({ hasText: "2026-12" });
-  await expect(november).toContainText("60,000");
-  await expect(december).toContainText("65,000");
-  await expect(november).toContainText("2,000");
-  await expect(december).toContainText("2,097");
+  await expect(november).toContainText("70,000");
+  await expect(december).toContainText("75,000");
+  await expect(november).toContainText("2,333");
+  await expect(december).toContainText("2,419");
   await ui.locator(".chart circle").first().hover();
   await expect(ui.locator(".budget-tooltip")).toContainText(
     "當期平均每日可支配",
@@ -125,18 +125,20 @@ test("赤字為負值、圖表紅點與ETF不可負擔警示", async ({ page }) 
   await expect(
     ui.getByText("每日平均可支配金額", { exact: true }).locator(".."),
   ).toContainText("-");
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await expect(ui.getByLabel("每月預計投入 ETF 金額")).toHaveValue("0");
   await expect(
-    ui
-      .getByText("本月 ETF 規劃投入（可負擔額為上限）", { exact: true })
-      .locator(".."),
-  ).toContainText("NT$ 0");
-  await expect(ui.getByText(/家庭現金流已無餘裕/)).toBeVisible();
+    ui.locator('.investment-notices [data-kind="deficit"]'),
+  ).toBeVisible();
   await ui.getByText("展開詳細分析", { exact: true }).click();
   await expect(ui.locator('circle[fill="#be493c"]').first()).toBeVisible();
-  await ui.getByLabel("每月 ETF 投資目標比例").fill("0");
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("10000");
   await expect(
-    ui.getByText("比例對應的每月目標投入", { exact: true }).locator(".."),
-  ).toContainText("NT$ 0");
+    ui.getByText("每月剩餘可支配金額", { exact: true }).first().locator(".."),
+  ).toContainText("-25,000");
+  await expect(
+    ui.locator('.investment-notices [data-kind="affordability"]'),
+  ).toBeVisible();
 });
 test("大型購買基金、達標時間與投資現金收入只計入一次", async ({ page }) => {
   const ui = await open(page);
@@ -164,11 +166,13 @@ test("大型購買基金、達標時間與投資現金收入只計入一次", as
   await expect(
     ui.getByText("每月總收入（月平均）", { exact: true }).locator(".."),
   ).toContainText("100,000");
-  await ui.getByLabel("每月 ETF 投資目標比例").fill("20");
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("20000");
   await expect(
-    ui.getByText("比例對應的每月目標投入", { exact: true }).locator(".."),
+    ui
+      .getByText("每月 ETF 計畫投入（只扣一次）", { exact: true })
+      .locator(".."),
   ).toContainText("20,000");
-  await ui.getByText("家庭支出比例與配置分析", { exact: true }).click();
   await expect(
     ui.getByRole("img", { name: /家庭每月分配環圈圖/ }),
   ).toBeVisible();
@@ -200,4 +204,116 @@ test("8%只適用投資累積預設，不改銀行或退休提領", async ({ pag
   ui = page.locator(".workspace:visible");
   await expect(ui.getByLabel("首年／當期資產提領率")).toHaveValue("4");
   await expect(ui.getByLabel("假設年化名目總報酬")).toHaveValue("4");
+});
+
+test("整合ETF金額預設0、10%快捷、環圈更新與取消獨立第五部分", async ({
+  page,
+}) => {
+  const ui = await open(page);
+  await ui.getByLabel("每月固定實領薪資").fill("100000");
+  await expect(
+    ui.getByRole("heading", { name: "設定自己的 ETF 投資目標" }),
+  ).toHaveCount(0);
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  const amount = ui.getByLabel("每月預計投入 ETF 金額");
+  await expect(amount).toHaveValue("0");
+  await expect(ui.locator(".investment-ratio")).toContainText("0%");
+  const before = ui
+    .getByText("每月剩餘可支配金額", { exact: true })
+    .first()
+    .locator("..");
+  await expect(before).toContainText("75,000");
+  await ui
+    .getByRole("button", { name: "以月收入 10% 試算", exact: true })
+    .click();
+  await expect(amount).toHaveValue("10,000");
+  await expect(before).toContainText("65,000");
+  await expect(ui.locator(".investment-ratio")).toContainText("10%");
+  await expect(
+    ui.locator(".allocation-legend li").filter({ hasText: "ETF 投資" }),
+  ).toContainText("10,000");
+  await amount.fill("100000");
+  await expect(before).toContainText("-25,000");
+  await expect(
+    ui.getByText("剩餘金錢：NT$ -25,000", { exact: true }),
+  ).toBeVisible();
+  await expect(amount).toHaveValue("100,000");
+});
+test("電信與訂閱同步現金流、健檢明細情境與參考上限可修正", async ({ page }) => {
+  const ui = await open(page);
+  await ui.getByLabel("每月固定實領薪資").fill("100000");
+  await ui.getByLabel("必要生活費輸入方式").selectOption("detail");
+  await ui.getByLabel("伙食", { exact: true }).fill("18000");
+  await ui.getByLabel("電信費", { exact: true }).fill("4000");
+  await ui.getByLabel("工具與娛樂訂閱", { exact: true }).fill("6000");
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await expect(
+    ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
+  ).toContainText("18%");
+  await expect(
+    ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
+  ).toContainText("3 個百分點");
+  await expect(
+    ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
+  ).toContainText("36,000");
+  await expect(
+    ui.locator(".allocation-legend li").filter({ hasText: "電信費" }),
+  ).toContainText("4,000");
+  await expect(
+    ui.locator(".allocation-legend li").filter({ hasText: "工具與娛樂訂閱" }),
+  ).toContainText("6,000");
+  await ui.getByText("展開詳細分析", { exact: true }).click();
+  await ui.getByText("查看各期精確數據", { exact: true }).click();
+  const first = ui.getByRole("row").nth(1);
+  await expect(first).toContainText("53,000");
+  await ui.getByLabel("電信費", { exact: true }).fill("5000");
+  await expect(first).toContainText("52,000");
+  await ui.getByText("調整支出分類與參考上限", { exact: true }).click();
+  await ui.getByLabel("伙食參考上限", { exact: true }).fill("");
+  await expect(ui.getByRole("alert")).toBeVisible();
+  await ui.getByLabel("伙食參考上限", { exact: true }).fill("20");
+  await expect(ui.getByRole("alert")).toHaveCount(0);
+  await expect(
+    ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
+  ).toHaveCount(0);
+  await ui.getByLabel("伙食的健檢分類").selectOption("wants");
+  await expect(first).toContainText("52,000");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+test("健檢提醒依序、緊急預備金不假定達標與四個原始來源", async ({ page }) => {
+  const ui = await open(page);
+  await ui.getByLabel("每月固定實領薪資").fill("100000");
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await expect(ui.locator('[data-kind="emergency"]')).toBeVisible();
+  await ui.getByLabel("我已自行確認緊急預備金安排").check();
+  await expect(ui.locator('[data-kind="planning"]')).toBeVisible();
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("100000");
+  const kinds = await ui
+    .locator(".investment-notices [data-kind]")
+    .evaluateAll((es) => es.map((e) => e.getAttribute("data-kind")));
+  expect(kinds).toEqual(["deficit", "affordability"]);
+  await ui.getByText("退休儲蓄與投資現金流說明", { exact: true }).click();
+  await expect(
+    ui.getByText(/Fidelity 的退休儲蓄參考目標為每年約稅前收入 15%/),
+  ).toBeVisible();
+  await expect(ui.getByText(/僅提供教育說明，不判定退休儲蓄/)).toBeVisible();
+  await ui.getByText("理財參考依據與資料來源", { exact: true }).click();
+  const refs = ui.locator(".reference-list");
+  await expect(refs.getByRole("listitem")).toHaveCount(4);
+  await expect(
+    refs.getByRole("link", { name: "Analyzing Budgets", exact: true }),
+  ).toHaveAttribute(
+    "href",
+    "https://files.consumerfinance.gov/f/documents/cfpb_building_block_activities_analyzing-budgets_guide.pdf",
+  );
+  await expect(refs).toContainText("消費支出統計僅作背景參考");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });
