@@ -21,7 +21,7 @@ export default function Compound() {
   const f = useForm({
     ...assetDefaults,
     monthly: "5000",
-    annual: "4",
+    annual: "8",
     bank: "1.5",
     change: "no",
     changeYear: "11",
@@ -86,6 +86,10 @@ export default function Compound() {
             max={10}
           />
         </div>
+        <p className="hint">
+          8% 僅為教育性假設，並非 0050、006208 或其他 ETF
+          的保證報酬。你可以自行調整。
+        </p>
         <Asset form={f} />
         <Details title="進階設定">
           <Toggle form={f} name="change">

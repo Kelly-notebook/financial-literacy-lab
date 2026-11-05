@@ -1150,3 +1150,109 @@ h3:not(:first-child) {
     scroll-behavior: auto !important;
   }
 }
+
+/* Household planning: keep the original palette, with clear signed cash-flow states. */
+.budget-workspace .hero-result.warning-result {
+  background: #7b3e32;
+  border-color: #7b3e32;
+}
+.deficit-banner {
+  margin-top: 18px;
+  border-top: 1px solid #ffffff35;
+  padding-top: 14px;
+  color: #fff0df;
+  font-size: 12px;
+}
+.negative-text {
+  color: #b34236 !important;
+}
+.budget-tooltip {
+  background: #fff;
+  border: 1px solid #dce5da;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 8px 24px #203c3515;
+  font-size: 11px;
+  max-width: 280px;
+}
+.budget-tooltip p {
+  margin: 5px 0 0;
+  color: #3c5547;
+}
+.chart-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 10px;
+  color: #44745c;
+}
+.chart-key span:last-child {
+  color: #a17a44;
+}
+.allocation-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: center;
+  gap: 15px;
+}
+.donut {
+  width: 100%;
+  min-width: 0;
+}
+.allocation-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 10px;
+}
+.allocation-legend li {
+  padding: 8px 0;
+  border-bottom: 1px solid #edf1e8;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+.allocation-legend li > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #6b806a;
+}
+.allocation-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.allocation-legend strong {
+  font-weight: 550;
+}
+.allocation-legend small {
+  font-weight: 400;
+  color: #6e8069;
+}
+.budget-workspace .hero-stats .stat.small > strong {
+  overflow-wrap: anywhere;
+}
+.budget-workspace .details-body > .eyebrow {
+  margin-bottom: 12px;
+}
+@media (max-width: 1100px) {
+  .allocation-layout {
+    grid-template-columns: 1fr;
+  }
+  .donut {
+    max-width: 260px;
+    margin: auto;
+  }
+}
+@media (max-width: 760px) {
+  .allocation-legend {
+    font-size: 11px;
+  }
+  .budget-workspace .hero-stats .stat.small > strong {
+    font-size: 21px;
+  }
+}

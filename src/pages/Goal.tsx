@@ -22,7 +22,7 @@ export default function Goal() {
     ...assetDefaults,
     target: "1000000",
     years: "10",
-    annual: "4",
+    annual: "8",
     bank: "1.5",
     two: "no",
     stageYears: "2",
@@ -91,6 +91,10 @@ export default function Goal() {
             step={0.5}
           />
         </div>
+        <p className="hint">
+          8% 僅為教育性假設，並非 0050、006208 或其他 ETF
+          的保證報酬。你可以自行調整。
+        </p>
         <Asset form={f} />
         <Details title="進階設定">
           <Field

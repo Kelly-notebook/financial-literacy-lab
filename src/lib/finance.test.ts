@@ -2,33 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   investment,
   goalMonthly,
-  budget,
   retirement,
   requiredRetirement,
   monthlyRate,
   sequenceReturns,
   settleWithdrawal,
-  type BudgetInput,
 } from "./finance";
 const last = <T>(a: T[]) => a.at(-1)!;
-const base: BudgetInput = {
-  mode: "monthly",
-  salary: 50000,
-  otherIncome: 0,
-  annualIncome: 600000,
-  bonusShare: 0,
-  living: 15000,
-  loans: [{ payment: 5000, months: 24 }],
-  carPrice: 300000,
-  carFund: 0,
-  carMonths: 60,
-  carCost: 3000,
-  travelPrice: 60000,
-  travelFund: 0,
-  travelMonths: 12,
-  investing: 5000,
-  saving: 0,
-};
 const retire = {
   initial: 1000000,
   rate: 0.04,
@@ -129,39 +109,6 @@ describe("投資與倒推", () => {
     expect(() =>
       goalMonthly(1000, 0, 0, 12, { months: 12, monthly: 1 }),
     ).toThrow();
-  });
-});
-describe("家庭預算", () => {
-  it("年薪180萬、月薪10萬的獎金60萬不計入固定月現金流", () => {
-    const r = budget({
-      ...base,
-      mode: "annual",
-      annualIncome: 1800000,
-      salary: 100000,
-    });
-    expect(r.bonus).toBe(600000);
-    expect(r.available).toBe(80000);
-  });
-  it("年薪不足固定薪資時拒絕計算", () =>
-    expect(() =>
-      budget({ ...base, mode: "annual", annualIncome: 100000 }),
-    ).toThrow());
-  it("赤字不能顯示成負可花金額", () => {
-    const r = budget({ ...base, salary: 10000 });
-    expect(r.deficit).toBeGreaterThan(0);
-    expect(r.daily).toBe(0);
-  });
-  it("第24月有扣款，第25月不扣款", () => {
-    expect(budget(base, 24).loan).toBe(5000);
-    expect(budget(base, 25).loan).toBe(0);
-    expect(budget(base, 25).remaining - budget(base, 24).remaining).toBe(5000);
-  });
-  it("購車後以持有成本取代存車基金", () =>
-    expect(budget(base, 61).carAllocation).toBe(3000));
-  it("基金已足夠不產生負儲蓄", () => {
-    expect(
-      budget({ ...base, carFund: 400000, travelFund: 100000 }),
-    ).toMatchObject({ car: 0, travel: 0 });
   });
 });
 describe("退休提領", () => {

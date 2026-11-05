@@ -1,4 +1,10 @@
-import { useId, useState, type ReactNode } from "react";
+import {
+  useId,
+  useState,
+  useRef,
+  useLayoutEffect,
+  type ReactNode,
+} from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -13,6 +19,11 @@ import {
 } from "recharts";
 import { Copy, Check, RotateCcw, ChevronDown } from "lucide-react";
 import { money, bounded } from "../lib/finance";
+import {
+  parseNumericInput,
+  formatMoneyInput,
+  editMoneyInput,
+} from "../lib/numberInput";
 export type Values = Record<string, string>;
 export function useForm(initial: Values) {
   const [values, setValues] = useState(initial);
@@ -20,9 +31,9 @@ export function useForm(initial: Values) {
     values,
     set: (key: string, value: string) =>
       setValues((v) => ({ ...v, [key]: value })),
+    patch: (patch: Values) => setValues((v) => ({ ...v, ...patch })),
     reset: () => setValues(initial),
-    n: (key: string) =>
-      values[key]?.trim() === "" ? NaN : Number(values[key]),
+    n: (key: string) => parseNumericInput(values[key]),
   };
 }
 export type Form = ReturnType<typeof useForm>;
@@ -44,6 +55,25 @@ export function Field({
   step?: number | string;
 }) {
   const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pendingCaret = useRef<number | null>(null);
+  const isMoney = unit === "元";
+  const display = isMoney
+    ? formatMoneyInput(form.values[name] ?? "")
+    : form.values[name];
+  useLayoutEffect(() => {
+    if (
+      inputRef.current !== null &&
+      pendingCaret.current !== null &&
+      inputRef.current === document.activeElement
+    ) {
+      inputRef.current.setSelectionRange(
+        pendingCaret.current,
+        pendingCaret.current,
+      );
+      pendingCaret.current = null;
+    }
+  });
   const v = form.n(name),
     invalid =
       !Number.isFinite(v) ||
@@ -57,13 +87,25 @@ export function Field({
         <input
           id={id}
           aria-label={label}
-          type="number"
+          ref={inputRef}
+          type={isMoney ? "text" : "number"}
           inputMode="decimal"
           min={min}
           max={max}
           step={step}
-          value={form.values[name]}
-          onChange={(e) => form.set(name, e.target.value)}
+          value={display}
+          onChange={(e) => {
+            if (isMoney) {
+              const edit = editMoneyInput(
+                e.target.value,
+                e.target.selectionStart ?? e.target.value.length,
+                display,
+                (e.nativeEvent as InputEvent).inputType,
+              );
+              pendingCaret.current = edit.caret;
+              form.set(name, edit.text);
+            } else form.set(name, e.target.value);
+          }}
           aria-invalid={invalid}
         />
         <span>{unit}</span>
@@ -82,11 +124,13 @@ export function Select({
   name,
   label,
   options,
+  onChange,
 }: {
   form: Form;
   name: string;
   label: string;
   options: [string, string][];
+  onChange?: (value: string) => void;
 }) {
   return (
     <label className="field">
@@ -94,7 +138,9 @@ export function Select({
       <select
         aria-label={label}
         value={form.values[name]}
-        onChange={(e) => form.set(name, e.target.value)}
+        onChange={(e) =>
+          onChange ? onChange(e.target.value) : form.set(name, e.target.value)
+        }
       >
         {options.map(([value, text]) => (
           <option value={value} key={value}>

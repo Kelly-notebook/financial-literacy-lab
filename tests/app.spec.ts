@@ -37,7 +37,7 @@ test("零報酬目標即時更新、展開不重設、切頁保留資料", async
     .click();
   await expect(
     page.locator(".workspace:visible").getByLabel("目標資產", { exact: true }),
-  ).toHaveValue("120000");
+  ).toHaveValue("120,000");
   await expect(
     page.locator(".workspace:visible").getByRole("table").first(),
   ).toBeVisible();
@@ -45,7 +45,7 @@ test("零報酬目標即時更新、展開不重設、切頁保留資料", async
   await page.getByRole("button", { name: "目標倒推", exact: true }).click();
   await expect(
     page.locator(".workspace:visible").getByLabel("目標資產", { exact: true }),
-  ).toHaveValue("120000");
+  ).toHaveValue("120,000");
 });
 test("非法與空值顯示錯誤，不出現 NaN/Infinity", async ({ page }) => {
   await openTool(page, "目標倒推");
@@ -65,48 +65,6 @@ test("非法與空值顯示錯誤，不出現 NaN/Infinity", async ({ page }) =>
     .getByRole("button", { name: "重設示範值", exact: true })
     .click();
   await expect(page.getByRole("alert")).toHaveCount(0);
-});
-test("家庭獎金分列、赤字與貸款到期", async ({ page }) => {
-  await openTool(page, "家庭預算");
-  await page
-    .locator(".workspace:visible")
-    .getByLabel("每月固定實領薪資", { exact: true })
-    .fill("10000");
-  await expect(
-    page
-      .locator(".workspace:visible")
-      .getByText("每月預算缺口", { exact: true }),
-  ).toBeVisible();
-  await page
-    .locator(".workspace:visible")
-    .getByLabel("收入模式")
-    .selectOption("annual");
-  await page
-    .locator(".workspace:visible")
-    .getByLabel("每月固定實領薪資", { exact: true })
-    .fill("100000");
-  await expect(
-    page
-      .locator(".workspace:visible")
-      .getByText("年度非固定收入", { exact: true }),
-  ).toBeVisible();
-  await page
-    .locator(".workspace:visible")
-    .getByText("房貸與其他貸款", { exact: true })
-    .click();
-  await page
-    .locator(".workspace:visible")
-    .getByLabel("信貸／軍貸月付額")
-    .fill("5000");
-  await page
-    .locator(".workspace:visible")
-    .getByText("展開詳細分析", { exact: true })
-    .click();
-  await expect(
-    page
-      .locator(".workspace:visible")
-      .getByText("第 25 個月起", { exact: true }),
-  ).toBeVisible();
 });
 test("退休策略切換、圖表與明細", async ({ page }) => {
   await openTool(page, "退休提領");

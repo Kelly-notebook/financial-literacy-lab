@@ -1,4 +1,15 @@
-import { budget, money, type BudgetInput } from "../lib/finance";
+import { money } from "../lib/finance";
+import {
+  budget,
+  forecast,
+  annualForecast,
+  allocations,
+  currentTaipeiMonth,
+  switchIncome,
+  type BudgetInput,
+  type Income,
+} from "../lib/budget";
+import { CashFlowChart, AllocationChart } from "../components/BudgetCharts";
 import {
   useForm,
   Field,
@@ -10,15 +21,23 @@ import {
   safely,
   Actions,
   Rows,
-  Chart,
+  Toggle,
 } from "../components/ui";
+const loanFields = [
+  ["mortgage", "mortgageMonths", "房貸"],
+  ["carLoan", "carLoanMonths", "車貸"],
+  ["credit", "creditMonths", "信貸"],
+  ["otherLoan", "otherMonths", "其他貸款"],
+];
 export default function Budget() {
   const f = useForm({
     mode: "monthly",
     salary: "",
+    annualBonus: "0",
+    annualIncome: "",
     otherIncome: "0",
-    annualIncome: "1800000",
-    bonusShare: "0",
+    investmentCash: "0",
+    cashTreatment: "exclude",
     living: "15000",
     livingMode: "total",
     food: "6000",
@@ -29,108 +48,192 @@ export default function Budget() {
     otherLiving: "2000",
     mortgage: "0",
     mortgageMonths: "240",
+    carLoan: "0",
+    carLoanMonths: "60",
     credit: "0",
     creditMonths: "24",
     otherLoan: "0",
     otherMonths: "12",
-    carPrice: "300000",
-    carFund: "0",
-    carMonths: "60",
-    carCost: "3000",
+    purchaseName: "購車",
+    purchasePrice: "300000",
+    purchaseFund: "0",
+    purchaseMonths: "60",
+    purchaseMonthly: "5000",
+    purchaseCost: "0",
     travelPrice: "60000",
     travelFund: "0",
     travelMonths: "12",
-    investing: "5000",
+    etfRatio: "10",
     saving: "0",
+    startMonth: currentTaipeiMonth(),
+    forecastYears: "5",
+    view: "monthly",
+    change: "no",
+    changeMonth: "13",
+    changeIncome: "50000",
+    changeLiving: "15000",
+    savingCategory: "生活費",
   });
+  const incomeInput = (): Income => ({
+    mode: f.values.mode as Income["mode"],
+    salary: f.n("salary"),
+    annualBonus: f.n("annualBonus"),
+    annualIncome: f.n("annualIncome"),
+  });
+  const changeMode = (mode: string) => {
+    const converted = safely(() =>
+      switchIncome(incomeInput(), mode as Income["mode"]),
+    );
+    if (converted.data) {
+      const c = converted.data;
+      f.patch({
+        mode,
+        salary: String(c.salary),
+        annualBonus: String(c.annualBonus),
+        annualIncome: String(c.annualIncome),
+      });
+    } else f.set("mode", mode);
+  };
   const result = safely(() => {
-    const living =
-      f.values.livingMode === "total"
-        ? f.n("living")
-        : [
-            "food",
-            "child",
-            "insurance",
-            "transport",
-            "utilities",
-            "otherLiving",
-          ].reduce((s, k) => s + f.n(k), 0);
+    const details = f.values.livingMode === "detail";
+    const parts = {
+      basic: f.n("food") + f.n("insurance") + f.n("utilities"),
+      family: f.n("child"),
+      transport: f.n("transport") + f.n("otherLiving"),
+    };
+    if (
+      details &&
+      [
+        "food",
+        "insurance",
+        "utilities",
+        "child",
+        "transport",
+        "otherLiving",
+      ].some((k) => !Number.isFinite(f.n(k)) || f.n(k) < 0 || f.n(k) > 1e12)
+    )
+      throw new Error("生活費明細需為 0～1兆的有效金額");
+    const living = details
+      ? parts.basic + parts.family + parts.transport
+      : f.n("living");
+    if (
+      !Number.isInteger(f.n("forecastYears")) ||
+      f.n("forecastYears") < 1 ||
+      f.n("forecastYears") > 50
+    )
+      throw new Error("預測年數需為 1～50 整數");
     const input: BudgetInput = {
-      mode: f.values.mode as "monthly" | "annual",
-      salary: f.n("salary"),
+      ...incomeInput(),
       otherIncome: f.n("otherIncome"),
-      annualIncome: f.values.mode === "annual" ? f.n("annualIncome") : 0,
-      bonusShare: f.values.mode === "annual" ? f.n("bonusShare") / 100 : 0,
+      investmentCash: f.n("investmentCash"),
+      cashTreatment: f.values.cashTreatment as BudgetInput["cashTreatment"],
       living,
-      loans: [
-        { payment: f.n("mortgage"), months: f.n("mortgageMonths") },
-        { payment: f.n("credit"), months: f.n("creditMonths") },
-        { payment: f.n("otherLoan"), months: f.n("otherMonths") },
-      ],
-      carPrice: f.n("carPrice"),
-      carFund: f.n("carFund"),
-      carMonths: f.n("carMonths"),
-      carCost: f.n("carCost"),
+      loans: loanFields.map(([p, m]) => ({ payment: f.n(p), months: f.n(m) })),
+      purchasePrice: f.n("purchasePrice"),
+      purchaseFund: f.n("purchaseFund"),
+      purchaseMonths: f.n("purchaseMonths"),
+      purchaseMonthly: f.n("purchaseMonthly"),
+      purchaseCost: f.n("purchaseCost"),
       travelPrice: f.n("travelPrice"),
       travelFund: f.n("travelFund"),
       travelMonths: f.n("travelMonths"),
-      investing: f.n("investing"),
+      etfRatio: f.n("etfRatio") / 100,
       saving: f.n("saving"),
+      startMonth: f.values.startMonth,
+      change:
+        f.values.change === "yes"
+          ? {
+              month: f.n("changeMonth"),
+              employmentMonthly: f.n("changeIncome"),
+              living: f.n("changeLiving"),
+            }
+          : undefined,
     };
     const current = budget(input),
-      endMonth =
-        Math.max(
-          0,
-          ...input.loans.filter((l) => l.payment > 0).map((l) => l.months),
-        ) + 1,
-      after = budget(input, endMonth);
+      monthly = forecast(input, f.n("forecastYears") * 12),
+      annual = annualForecast(monthly),
+      year = forecast(input, 12),
+      items = allocations(
+        input,
+        current,
+        details && !(input.change && input.change.month === 1)
+          ? parts
+          : undefined,
+      );
+    const eligible = items.filter((x) => x.name !== "剩餘可支配金額");
+    const selected =
+      eligible.find((x) => x.name === f.values.savingCategory) ??
+      eligible.find((x) => x.name.includes("生活")) ??
+      eligible[0];
     return {
       input,
       current,
-      after,
-      endMonth,
-      chart: Array.from(
-        { length: Math.min(41, Math.ceil(endMonth / 12) + 1) },
-        (_, year) => ({
-          year,
-          remaining: budget(input, year * 12 + 1).remaining,
-          loan: budget(input, year * 12 + 1).loan,
-        }),
-      ),
+      monthly,
+      annual,
+      items,
+      selected,
+      annualRemaining: year.reduce((s, x) => s + x.remaining, 0),
+      annualIncome: year.reduce((s, x) => s + x.income, 0),
     };
   });
   const r = result.data;
+  const c = r?.current;
   return (
-    <div className="workspace">
+    <div className="workspace budget-workspace">
       <section className="panel inputs">
         <div className="panel-heading">
           <span className="eyebrow">LIFE IN BALANCE</span>
-          <h2>把生活，放進計畫裡</h2>
-          <p>從固定現金流出發，為想要的生活留一筆。</p>
+          <h2>家庭財務與生活目標規劃</h2>
+          <p>先看日常餘裕，再安排目標與未來。</p>
         </div>
         <Select
           form={f}
           name="mode"
           label="收入模式"
+          onChange={changeMode}
           options={[
-            ["monthly", "月薪模式"],
-            ["annual", "年薪模式（分列獎金）"],
+            ["monthly", "月薪模式：固定月薪＋年度獎金"],
+            ["annual", "年薪模式：全年總收入（含獎金）"],
           ]}
         />
-        <Field form={f} name="salary" label="每月固定實領薪資" />
-        <Field form={f} name="otherIncome" label="其他每月固定收入" />
-        {f.values.mode === "annual" && (
+        {f.values.mode === "monthly" ? (
           <>
-            <Field form={f} name="annualIncome" label="年度預估實領總收入" />
-            <Field
-              form={f}
-              name="bonusShare"
-              label="獎金可用於年度目標比例"
-              unit="%"
-              max={100}
-            />
+            <Field form={f} name="salary" label="每月固定實領薪資" />
+            <Field form={f} name="annualBonus" label="年度獎金（選填）" />
           </>
+        ) : (
+          <Field
+            form={f}
+            name="annualIncome"
+            label="全年實領總收入（已含獎金）"
+          />
         )}
+        <p className="hint">
+          {f.values.mode === "annual"
+            ? "全年總收入 ÷ 12 為月平均，不會再次加計獎金，也不代表每月實際收到相同金額。"
+            : "有年度獎金時，總收入及試算結果以月平均呈現；獎金 ÷ 12 只是規劃基準，不代表每月固定入帳。"}
+        </p>
+        <Field form={f} name="otherIncome" label="其他每月固定收入" />
+        <Details title="投資現金收入">
+          <Field
+            form={f}
+            name="investmentCash"
+            label="每年預估股息／投資現金收入"
+          />
+          <Select
+            form={f}
+            name="cashTreatment"
+            label="投資現金收入處理方式"
+            options={[
+              ["exclude", "不納入家庭可支配預算"],
+              ["spend", "納入可支配預算（月平均）"],
+              ["reinvest", "股息再投入，不列可支配現金"],
+            ]}
+          />
+          <p className="hint">
+            只填實際現金收入，不含股票未實現價差。股息不保證且可能變動；平均月額不代表每月都有配息，再投入與可支配現金不可重複計入。
+          </p>
+        </Details>
         <Select
           form={f}
           name="livingMode"
@@ -146,55 +249,67 @@ export default function Budget() {
           <div className="field-grid">
             {[
               ["food", "伙食"],
-              ["child", "育兒"],
+              ["child", "育兒與家庭"],
               ["insurance", "保險"],
               ["transport", "交通"],
               ["utilities", "水電"],
-              ["otherLiving", "其他生活費"],
+              ["otherLiving", "其他生活支出"],
             ].map(([k, l]) => (
               <Field key={k} form={f} name={k} label={l} />
             ))}
           </div>
         )}
-        <Details title="房貸與其他貸款">
-          {[
-            ["mortgage", "mortgageMonths", "房貸"],
-            ["credit", "creditMonths", "信貸／軍貸"],
-            ["otherLoan", "otherMonths", "其他貸款"],
-          ].map(([k, m, l]) => (
-            <div className="field-grid" key={k}>
-              <Field form={f} name={k} label={`${l}月付額`} />
+        <Details title="貸款設定：房貸、車貸、信貸、其他">
+          {loanFields.map(([p, m, label]) => (
+            <div className="field-grid" key={p}>
+              <Field form={f} name={p} label={`${label}月付額`} />
               <Field
                 form={f}
                 name={m}
-                label="剩餘期數"
+                label={`${label}剩餘期數`}
                 unit="月"
                 max={600}
                 step={1}
               />
             </div>
           ))}
+          <p className="hint">
+            沒有貸款填 0；剩餘 24 期表示第 24 個月仍扣款、第 25 個月起停止。
+          </p>
         </Details>
-        <Details title="購車、旅行與儲蓄目標">
-          <h3>購車計畫</h3>
-          <Field form={f} name="carPrice" label="購車目標價格" />
+        <Details title="大型購買與旅行目標">
+          <label className="field">
+            <span>大型購買目標名稱</span>
+            <input
+              aria-label="大型購買目標名稱"
+              value={f.values.purchaseName}
+              maxLength={50}
+              onChange={(e) => f.set("purchaseName", e.target.value)}
+            />
+          </label>
+          <Field form={f} name="purchasePrice" label="預計購買總金額" />
           <div className="field-grid">
             <Field
               form={f}
-              name="carMonths"
-              label="幾個月後購車"
+              name="purchaseMonths"
+              label="預計幾個月後購買"
               unit="月"
               min={1}
               max={600}
               step={1}
             />
-            <Field form={f} name="carFund" label="現有購車基金" />
+            <Field form={f} name="purchaseFund" label="已準備的購買基金" />
           </div>
-          <Field form={f} name="carCost" label="購車後每月持有成本" />
+          <Field
+            form={f}
+            name="purchaseMonthly"
+            label="目前固定目標儲蓄（比較用）"
+          />
+          <Field form={f} name="purchaseCost" label="購入後每月額外持有成本" />
           <p className="hint">
-            請考慮稅金、保險、燃料、停車與維修；購車後以持有成本取代購車儲蓄。
+            可填汽車、鋼琴、家電或購屋基金。月預算依期限所需儲蓄扣除；固定儲蓄僅比較達標時間，不再重複扣款。購屋目前僅處理資金儲蓄，不估算核貸或購屋能力。
           </p>
-          <h3>旅行計畫</h3>
+          <h3>旅行與其他儲蓄</h3>
           <Field form={f} name="travelPrice" label="每次旅行預算" />
           <div className="field-grid">
             <Field
@@ -208,14 +323,62 @@ export default function Budget() {
             />
             <Field form={f} name="travelFund" label="現有旅遊基金" />
           </div>
-          <Field form={f} name="investing" label="每月 ETF 投資預算" />
           <Field form={f} name="saving" label="其他每月儲蓄目標" />
+        </Details>
+        <Details title="未來情境設定">
+          <label className="field">
+            <span>試算起始年月（臺灣時間）</span>
+            <input
+              aria-label="試算起始年月"
+              type="month"
+              value={f.values.startMonth}
+              onChange={(e) => f.set("startMonth", e.target.value)}
+            />
+          </label>
+          <Field
+            form={f}
+            name="forecastYears"
+            label="預測年數"
+            unit="年"
+            min={1}
+            max={50}
+            step={1}
+          />
+          <Toggle form={f} name="change">
+            設定一次未來收入與生活費變動
+          </Toggle>
+          {f.values.change === "yes" && (
+            <>
+              <Field
+                form={f}
+                name="changeMonth"
+                label="從第幾個月開始變動"
+                unit="月"
+                min={1}
+                max={600}
+                step={1}
+              />
+              <Field
+                form={f}
+                name="changeIncome"
+                label="變動後工作收入（月平均，含獎金）"
+              />
+              <Field
+                form={f}
+                name="changeLiving"
+                label="變動後每月必要生活費"
+              />
+            </>
+          )}
+          <p className="hint">
+            其他固定收入及投資現金收入維持原設定。這是可調整的情境，不是薪資或家庭支出的預測。
+          </p>
         </Details>
         <Actions
           reset={f.reset}
           summary={
-            r
-              ? `家庭預算：月可分配餘額 ${money(r.current.available)} 元；目標分配後餘額 ${money(r.current.remaining)} 元；每日平均可分配 ${money(r.current.daily)} 元；每月缺口 ${money(r.current.deficit)} 元。非帳戶餘額。`
+            c
+              ? `家庭規劃：${c.period} 月平均收入 ${money(c.income)} 元，月可支配 ${money(c.remaining)} 元，日平均 ${money(c.daily)} 元（本月${c.days}天）。ETF目標 ${money(c.etfTarget)} 元，可負擔規劃 ${money(c.etf)} 元。僅為情境試算。`
               : ""
           }
         />
@@ -225,113 +388,241 @@ export default function Budget() {
         {!r && (
           <div className="panel empty">
             <span>01 / 從收入開始</span>
-            <h2>先填入你的每月實領薪資</h2>
-            <p>資料只在此頁試算，預設不保存。生活目標都可以展開修改。</p>
+            <h2>先填入你的收入</h2>
+            <p>選擇月薪或年薪模式。資料只在瀏覽器試算，不保存也不上傳。</p>
           </div>
         )}
-        {r && (
+        {r && c && (
           <>
-            <div
-              className={`hero-result ${r.current.deficit ? "warning-result" : ""}`}
-            >
-              <span className="result-badge">讓每一筆分配更清楚</span>
-              <Stat
-                label={r.current.deficit ? "每月預算缺口" : "每天可自由分配"}
-                value={r.current.deficit || r.current.daily}
-              />
+            <div className={`hero-result ${c.deficit ? "warning-result" : ""}`}>
+              <span className="result-badge">01 / 現在的生活餘裕</span>
+              <Stat label="每日平均可支配金額" value={c.daily} />
               <p>
-                {r.current.deficit
-                  ? "目前目標超過固定現金流，建議延長期限或調整預算。"
-                  : "全年平均＝每月剩餘 × 12 ÷ 365，並非今天的帳戶餘額。"}
+                {c.period} 共 {c.days} 天：每月可支配金額 ÷ {c.days}
+                。月平均收入不等於實際入帳時間，亦非帳戶餘額。
               </p>
               <div className="hero-stats">
-                <Stat
-                  small
-                  label="每月可分配餘額（目標前）"
-                  value={r.current.available}
-                />
-                <Stat
-                  small
-                  label="每月目標分配後餘額"
-                  value={r.current.remaining}
-                />
+                <Stat small label="每月總收入（月平均）" value={c.income} />
+                <Stat small label="每月剩餘可支配金額" value={c.remaining} />
               </div>
-            </div>
-            <div className="panel">
-              <h3>每月預算的去向</h3>
-              <Breakdown
-                items={[
-                  [
-                    "固定收入（不含獎金）",
-                    r.input.salary + r.input.otherIncome,
-                  ],
-                  ["貸款支出", r.current.loan],
-                  ["必要生活費", r.input.living],
-                  ["購車預留", r.current.car],
-                  ["旅行預留", r.current.travel],
-                  ["ETF 投資預算", r.input.investing],
-                  ["其他儲蓄", r.input.saving],
-                ]}
-              />
-              {f.values.mode === "annual" && (
-                <div className="note">
-                  <h3>獎金與全年預算分開看</h3>
-                  <Breakdown
-                    items={[
-                      ["年度非固定收入", r.current.bonus],
-                      ["指定可分配獎金", r.current.bonus * r.input.bonusShare],
-                      [
-                        "全年預算餘額估算（含指定獎金）",
-                        r.current.annualRemaining,
-                      ],
-                    ]}
-                  />
-                  <p>
-                    全年餘額以目前月度配置 × 12
-                    加指定獎金估算，未逐月反映到期變動；獎金不保證到帳，也不算每月可花現金。
-                  </p>
+              {c.deficit > 0 && (
+                <div className="deficit-banner" role="status">
+                  每月預算缺口 NT$ {money(c.deficit)}
+                  ；負值保留，請調整支出、目標期限或收入假設。此時 ETF
+                  規劃投入為 0。
                 </div>
               )}
             </div>
-            <Details>
-              <h3>貸款結束後，空間如何改變？</h3>
-              <Rows
-                headers={["時間", "貸款月付", "目標分配後月結餘"]}
-                rows={[
-                  ["目前", money(r.current.loan), money(r.current.remaining)],
-                  [
-                    `第 ${r.endMonth} 個月起`,
-                    money(r.after.loan),
-                    money(r.after.remaining),
-                  ],
+            <div className="panel">
+              <h3>收入與支出，一起看清楚</h3>
+              <Breakdown
+                items={[
+                  ["工作收入（月平均，含獎金）", c.employmentMonthly],
+                  ["其他每月固定收入", r.input.otherIncome],
+                  ["投資現金收入（月平均，僅計納入部分）", c.cashMonthly],
+                  ["每月必要支出（含購入後成本）", c.living + c.purchaseCost],
+                  ["每月貸款支出", c.loan],
+                  ["每月目標儲蓄與投資", c.goals],
+                  ["每月剩餘可支配金額", c.remaining],
                 ]}
               />
-              <Chart
-                data={r.chart}
-                lines={[
-                  ["remaining", "月結餘", "#20745f"],
-                  ["loan", "貸款月付", "#cb9244"],
+              {f.values.mode === "monthly" && (
+                <p className="hint">
+                  固定月薪 NT$ {money(r.input.salary)}；年度獎金 NT${" "}
+                  {money(r.input.annualBonus)}，月平均獎金 NT${" "}
+                  {money(r.input.annualBonus / 12)}。獎金不保證到帳。
+                </p>
+              )}
+              <p className="hint">
+                起始連續 12 個月的收入合計 NT$ {money(r.annualIncome)}；結餘合計
+                NT$ {money(r.annualRemaining)}，已逐月計入貸款與目標到期變化。
+              </p>
+            </div>
+            <Details>
+              <span className="eyebrow">02 / LOOK AHEAD</span>
+              <h3>未來家庭可支配金額變化</h3>
+              <Select
+                form={f}
+                name="view"
+                label="現金流顯示週期"
+                options={[
+                  ["monthly", "逐月：每月金額"],
+                  ["annual", "逐年：平均每月金額＋年度總額"],
+                ]}
+              />
+              <CashFlowChart
+                rows={f.values.view === "annual" ? r.annual : r.monthly}
+                annual={f.values.view === "annual"}
+              />
+              <p className="hint">
+                圖表縱軸為
+                {f.values.view === "annual"
+                  ? "該年涵蓋月份的平均每月金額"
+                  : "當月金額"}
+                。每日值依當期結餘及實際天數重新計算；年度每日平均＝涵蓋期間總結餘
+                ÷
+                總天數。貸款結束即停止扣款；目標儲蓄結束、旅行基金用完與自訂收入／生活費變動均逐期更新。不是累積資產。
+              </p>
+              <Details title="查看各期精確數據">
+                {f.values.view === "annual" ? (
+                  <Rows
+                    headers={[
+                      "年度與涵蓋月份",
+                      "平均月結餘",
+                      "平均貸款月付",
+                      "期間總結餘",
+                      "平均每日可支配",
+                    ]}
+                    rows={r.annual.map((x) => [
+                      x.period,
+                      money(x.remaining),
+                      money(x.loan),
+                      money(x.annualRemaining),
+                      money(x.daily),
+                    ])}
+                  />
+                ) : (
+                  <Rows
+                    headers={[
+                      "年月",
+                      "月結餘",
+                      "貸款月付總額",
+                      "平均每日可支配",
+                      "當月天數",
+                    ]}
+                    rows={r.monthly.map((x) => [
+                      x.period,
+                      money(x.remaining),
+                      money(x.loan),
+                      money(x.daily),
+                      x.days,
+                    ])}
+                  />
+                )}
+              </Details>
+              <p className="hint">
+                緊急預備金參考（必要生活費與貸款 6～12 個月）：NT${" "}
+                {money(c.emergencyMin)}～{money(c.emergencyMax)}。
+              </p>
+            </Details>
+            <Details title="家庭支出比例與配置分析">
+              <span className="eyebrow">03 / FIND YOUR BALANCE</span>
+              <h3>家庭收入都分配到哪裡？</h3>
+              <AllocationChart
+                items={r.items}
+                income={c.income}
+                deficit={c.deficit}
+              />
+              <h3>如果調整其中一項分配？</h3>
+              <Select
+                form={{
+                  ...f,
+                  values: {
+                    ...f.values,
+                    savingCategory: r.selected?.name ?? "",
+                  },
+                }}
+                name="savingCategory"
+                label="支出調整情境項目"
+                options={r.items
+                  .filter((x) => x.name !== "剩餘可支配金額")
+                  .map((x) => [x.name, x.name])}
+              />
+              {r.selected && (
+                <p>
+                  以「{r.selected.name}」NT$ {money(r.selected.value)}{" "}
+                  為例，降低 5% 可每月多留 NT$ {money(r.selected.value * 0.05)}
+                  ；降低 10% 可多留 NT$ {money(r.selected.value * 0.1)}
+                  。這是假設比較，不判定你的必要支出過高；貸款月付不能任意減少，若調整需另行評估契約與條件。
+                </p>
+              )}
+            </Details>
+            <div className="panel">
+              <span className="eyebrow">04 / A GOAL WORTH PLANNING</span>
+              <h3>{f.values.purchaseName || "大型購買目標"}</h3>
+              <Breakdown
+                items={[
+                  ["預計購買總金額", r.input.purchasePrice],
+                  ["已準備的購買基金", r.input.purchaseFund],
+                  ["每月需要儲蓄", c.goal.required],
                 ]}
               />
               <p className="hint">
-                依目前固定薪資與生活費、貸款剩餘期數試算；購車後改扣持有成本。此圖是各時點的月現金流，不是累積資產；薪資成長、生活費通膨與跨年齡預測於第二階段加入。
+                希望 {r.input.purchaseMonths} 個月後購買；目前固定儲蓄 NT${" "}
+                {money(r.input.purchaseMonthly)}／月，
+                {c.goal.monthsToGoal === null
+                  ? "尚無法推算達標時間，請設定大於 0 的每月儲蓄。"
+                  : c.goal.monthsToGoal === 0
+                    ? "現有基金已足夠。"
+                    : `不計利息約 ${c.goal.monthsToGoal} 個月達標。`}
+                可在左側／上方「大型購買與旅行目標」修改。
               </p>
-              <h3>緊急預備金參考</h3>
-              <p>
-                目前每月必要生活費與貸款的 6～12 個月：約{" "}
-                <strong>
-                  NT$ {money(r.current.emergencyMin)}～
-                  {money(r.current.emergencyMax)}
-                </strong>
-                。
+            </div>
+            <div className="panel">
+              <span className="eyebrow">05 / INVEST WITH A PLAN</span>
+              <h3>設定自己的 ETF 投資目標</h3>
+              <Field
+                form={f}
+                name="etfRatio"
+                label="每月 ETF 投資目標比例"
+                unit="%"
+                max={100}
+              />
+              <p className="hint">
+                以本月總收入（月平均）為基準，預設 10%，允許
+                0%。這是你自行設定的目標，不是適合所有人的最低投資標準。0050
+                僅作教育案例，不串接即時股價。
               </p>
-            </Details>
+              <Breakdown
+                items={[
+                  ["比例對應的每月目標投入", c.etfTarget],
+                  ["目標的每日平均投入", c.etfDaily],
+                  ["其他支出與目標後的可負擔額", c.etfAffordable],
+                  ["本月 ETF 規劃投入（可負擔額為上限）", c.etf],
+                ]}
+              />
+              {c.etfGap > 0 ? (
+                <div className="note caution">
+                  投資目標超過可負擔額 NT$ {money(c.etfGap)}。
+                  {c.beforeEtf <= 0
+                    ? "家庭現金流已無餘裕，不建議強行投入；本月規劃投入為 0。"
+                    : "試算已限制投入金額，請自行調整目標或其他分配。"}
+                </div>
+              ) : (
+                <p className="hint">
+                  此情境下可負擔設定的投入目標；不代表投資風險適合你或報酬有保證。
+                </p>
+              )}
+              <h3>投資資產與現金流分開看</h3>
+              <Breakdown
+                items={[
+                  ["每年預估投資現金收入", r.input.investmentCash],
+                  ["納入家庭預算的平均月額", c.cashMonthly],
+                ]}
+              />
+              <p className="hint">
+                目前選擇：
+                {
+                  {
+                    exclude: "不納入預算",
+                    spend: "納入可支配預算",
+                    reinvest: "股息再投入，不列可支配現金",
+                  }[r.input.cashTreatment]
+                }
+                。股息可能變動且不保證，平均月額不是實際配息月份；未實現資本利得不算可花收入。此頁不模擬投資報酬，不與複利模組重複加計股息。
+              </p>
+            </div>
             <Details title="試算假設與風險">
               <p>
-                收入為實領金額。總額與明細擇一計入，獎金與固定收入分開。旅遊基金只用於這次目標的差額試算；用完後下一輪需重新設定。未預設獎金必然到帳，亦不保證投資收益。
+                月薪模式的年度工作收入＝固定月薪 × 12
+                ＋年度獎金；年薪模式直接採全年總收入，不再另加獎金。為比較規劃，兩者均以月平均換算，不是實際逐月入帳預測。其他收入及支出以本次輸入為準。
               </p>
               <p>
-                此處不推算累積資產，也未納入調薪與生活費通膨。資料不儲存、不傳送至外部服務。
+                旅行基金只抵減第一個旅行週期，後續完整預留；大型購買儲蓄於期限後停止，改計選填持有成本。ETF
+                以可負擔額為上限，缺口及實際投入另列。每期日平均依當月天數計算，赤字保持負值。
+              </p>
+              <p>
+                未納入自動調薪、通膨或年齡／退休情境；自訂變動不代表未來保證。沒有資產累積推算。完整購屋能力與相同總本金教育比較仍留待後續開發。資料不儲存、不傳送。
               </p>
             </Details>
           </>
