@@ -1,3 +1,5 @@
+import { AICoach } from "../components/AICoach";
+import { householdSummary } from "../lib/householdSummary";
 import { useRef } from "react";
 import { useBudgetForm } from "../hooks/useBudgetForm";
 import { money as formatMoney } from "../lib/finance";
@@ -223,6 +225,7 @@ export default function Budget({
   if (result.data) lastValid.current = result.data;
   const r = result.data ?? lastValid.current;
   const c = r?.current;
+  const fullSummary = householdSummary(f.values, r);
   return (
     <div className="workspace budget-workspace">
       <section className="panel inputs">
@@ -326,19 +329,23 @@ export default function Budget({
             <>
               <fieldset className="expense-section">
                 <legend>必要生活支出</legend>
-                {livingFields
-                  .filter((x) => x.group === "needs")
-                  .map((x) => (
-                    <Field key={x.id} form={f} name={x.id} label={x.name} />
-                  ))}
+                <div className="living-detail-grid">
+                  {livingFields
+                    .filter((x) => x.group === "needs")
+                    .map((x) => (
+                      <Field key={x.id} form={f} name={x.id} label={x.name} />
+                    ))}
+                </div>
               </fieldset>
               <fieldset className="expense-section">
                 <legend>非必要消費</legend>
-                {livingFields
-                  .filter((x) => x.group === "wants")
-                  .map((x) => (
-                    <Field key={x.id} form={f} name={x.id} label={x.name} />
-                  ))}
+                <div className="living-detail-grid">
+                  {livingFields
+                    .filter((x) => x.group === "wants")
+                    .map((x) => (
+                      <Field key={x.id} form={f} name={x.id} label={x.name} />
+                    ))}
+                </div>
               </fieldset>
               <button
                 className="scenario-button"
@@ -502,11 +509,7 @@ export default function Budget({
             lastValid.current = undefined;
             f.reset();
           }}
-          summary={
-            c
-              ? `家庭規劃：${c.period} 月平均收入 ${money(c.income)} 元，月可支配 ${money(c.remaining)} 元，日平均 ${money(c.daily)} 元（本月${c.days}天）。ETF目標 ${money(c.etfTarget)} 元，計畫投入 ${money(c.etf)} 元。僅為情境試算。`
-              : ""
-          }
+          summary={fullSummary}
         />
       </section>
       <section className="results" aria-label="家庭預算結果">
@@ -694,6 +697,7 @@ export default function Budget({
         )}
         <BudgetReferences />
         <FinancialSafety form={f} onOpenRetirement={onOpenRetirement} />
+        <AICoach summary={fullSummary} />
       </section>
     </div>
   );
