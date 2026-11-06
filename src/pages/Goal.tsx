@@ -1,3 +1,4 @@
+import { useLastValidResult } from "../hooks/useNumericDrafts";
 import { goalMonthly, investment, money } from "../lib/finance";
 import {
   useForm,
@@ -62,7 +63,7 @@ export default function Goal() {
     });
     return { initial, monthly, bankMonthly, rows, end: rows.at(-1)!, stage };
   });
-  const r = result.data;
+  const r = useLastValidResult(result, f.revision);
   return (
     <div className="workspace">
       <section className="panel inputs">
@@ -122,6 +123,10 @@ export default function Goal() {
             </>
           )}
         </Details>
+        <ErrorNotice message={result.error} />
+        <p className="hint">
+          可先清空再輸入；暫時無效時保留有效試算，完成後在欄位旁提示。
+        </p>
         <Actions
           reset={f.reset}
           summary={
@@ -132,7 +137,6 @@ export default function Goal() {
         />
       </section>
       <section className="results" aria-label="目標倒推結果">
-        <ErrorNotice message={result.error} />
         {r && (
           <>
             <div className="hero-result">

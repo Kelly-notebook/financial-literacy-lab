@@ -1,3 +1,4 @@
+import { useLastValidResult } from "../hooks/useNumericDrafts";
 import {
   retirement,
   requiredRetirement,
@@ -83,6 +84,7 @@ export default function Retirement() {
       }));
       return {
         initial,
+        input,
         gap,
         rows,
         forward,
@@ -95,7 +97,7 @@ export default function Retirement() {
       };
     }),
   ];
-  const r = result.data;
+  const r = useLastValidResult(result, f.revision);
   return (
     <div className="workspace">
       <section className="panel inputs">
@@ -210,6 +212,10 @@ export default function Retirement() {
             標籤不會自動改變報酬率或提領率，不代表實際歷史績效。
           </p>
         </Details>
+        <ErrorNotice message={result.error} />
+        <p className="hint">
+          可先清空再輸入；暫時無效時保留有效試算，完成後在欄位旁提示。
+        </p>
         <Actions
           reset={f.reset}
           summary={
@@ -220,7 +226,6 @@ export default function Retirement() {
         />
       </section>
       <section className="results" aria-label="退休提領結果">
-        <ErrorNotice message={result.error} />
         {r && (
           <>
             <div className="hero-result">
@@ -248,7 +253,7 @@ export default function Retirement() {
                 />
                 <Stat
                   small
-                  label={`${f.values.years} 年末名目剩餘資產`}
+                  label={`${r.input.years} 年末名目剩餘資產`}
                   value={r.end.balance}
                 />
               </div>
@@ -257,9 +262,9 @@ export default function Retirement() {
               <h3>先看懂你選的提領方式</h3>
               <p>
                 {f.values.strategy === "real"
-                  ? `第一年以起始資產提領 ${f.values.rate}%，往後每年依 ${f.values.inflation}% 通膨增加預定金額，不跟著當期市值重算。`
+                  ? `第一年以起始資產提領 ${f.n("rate")}%，往後每年依 ${f.n("inflation")}% 通膨增加預定金額，不跟著當期市值重算。`
                   : f.values.strategy === "proportional"
-                    ? `每年以當年年初剩餘資產的 ${f.values.rate}% 提領，收入會隨資產變動；不套用通膨增額，也不保證足夠生活。`
+                    ? `每年以當年年初剩餘資產的 ${f.n("rate")}% 提領，收入會隨資產變動；不套用通膨增額，也不保證足夠生活。`
                     : "每年預定提領相同名目金額，通膨會降低購買力。"}
               </p>
               <Breakdown
@@ -281,7 +286,7 @@ export default function Retirement() {
               <div className={r.failure ? "note caution" : "note"}>
                 {r.failure
                   ? `第 ${r.failure.year} 年（${r.failure.age} 歲）${r.failure.unmet ? "預定提領需求無法滿足" : "資產耗盡"}。`
-                  : `此固定報酬情境至 ${f.n("age") + f.n("years")} 歲尚有資產，但不代表安全提領率已獲驗證。`}
+                  : `此固定報酬情境至 ${r.input.age + r.input.years} 歲尚有資產，但不代表安全提領率已獲驗證。`}
               </div>
             </div>
             <Details>
@@ -309,8 +314,8 @@ export default function Retirement() {
               <h3>10／20／30 年與自訂終點</h3>
               <Rows
                 headers={["年度", "名目資產", "實質資產"]}
-                rows={[...new Set([10, 20, 30, f.n("years")])]
-                  .filter((y) => y <= f.n("years"))
+                rows={[...new Set([10, 20, 30, r.input.years])]
+                  .filter((y) => y <= r.input.years)
                   .sort((a, b) => a - b)
                   .map((y) => [
                     `${y}年`,

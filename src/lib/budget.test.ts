@@ -229,16 +229,14 @@ describe("大型購買與分類", () => {
     const row = budget(base),
       items = allocations(budgetEntries(base, row), row.remaining);
     expect(items.map((x) => x.name)).not.toContain("育兒與家庭");
-    expect(items.find((x) => x.name === "其他生活支出（總額）")?.value).toBe(
-      15000,
-    );
+    expect(items.find((x) => x.name === "必要生活支出")?.value).toBe(15000);
     expect(items.reduce((s, x) => s + x.value, 0)).toBe(row.income);
   });
   it("赤字不放入環圈負值切片，總分配可大於收入", () => {
     const p = { ...base, salary: 10000 },
       row = budget(p),
       items = allocations(budgetEntries(p, row), row.remaining);
-    expect(items.every((x) => x.value > 0)).toBe(true);
+    expect(items.every((x) => x.value >= 0)).toBe(true);
     expect(items.reduce((s, x) => s + x.value, 0)).toBe(
       row.income + row.deficit,
     );
@@ -289,11 +287,7 @@ it("任意大型購買的持有成本不被虛構成房貸", () => {
   const p = { ...base, purchaseCost: 1000 };
   const row = budget(p, 61),
     items = allocations(budgetEntries(p, row), row.remaining);
-  expect(items.find((x) => x.name === "其他生活支出（總額）")?.value).toBe(
-    16000,
-  );
-  expect(
-    items.find((x) => x.name === "貸款（房貸、車貸、信貸等）"),
-  ).toBeUndefined();
+  expect(items.find((x) => x.name === "必要生活支出")?.value).toBe(16000);
+  expect(items.find((x) => x.name === "貸款")!.value).toBe(0);
   expect(items.reduce((sum, x) => sum + x.value, 0)).toBe(row.income);
 });

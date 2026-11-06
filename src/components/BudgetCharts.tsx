@@ -116,15 +116,22 @@ export function AllocationChart({
   items,
   income,
   deficit,
+  onSelect,
 }: {
   items: Allocation[];
   income: number;
   deficit: number;
+  onSelect?: (name: string) => void;
 }) {
   const id = useId();
   const total = items.reduce((s, x) => s + x.value, 0);
   return (
     <>
+      {deficit > 0 && (
+        <p className="monthly-deficit" role="status">
+          每月赤字 NT$ {money(deficit)}
+        </p>
+      )}
       <div className="allocation-layout">
         <div
           className="donut"
@@ -134,7 +141,7 @@ export function AllocationChart({
           <ResponsiveContainer width="100%" height={230}>
             <PieChart>
               <Pie
-                data={items}
+                data={items.filter((x) => x.value > 0)}
                 dataKey="value"
                 nameKey="name"
                 innerRadius={65}
@@ -142,9 +149,11 @@ export function AllocationChart({
                 paddingAngle={2}
                 isAnimationActive={false}
               >
-                {items.map((item) => (
-                  <Cell key={`${id}-${item.name}`} fill={item.color} />
-                ))}
+                {items
+                  .filter((x) => x.value > 0)
+                  .map((item) => (
+                    <Cell key={`${id}-${item.name}`} fill={item.color} />
+                  ))}
               </Pie>
               <Tooltip formatter={(v) => `NT$ ${money(Number(v))}`} />
             </PieChart>
@@ -155,7 +164,17 @@ export function AllocationChart({
             <li key={item.name}>
               <span>
                 <i style={{ background: item.color }} />
-                {item.name}
+                {onSelect &&
+                ["必要生活支出", "非必要消費"].includes(item.name) ? (
+                  <button
+                    className="legend-button"
+                    onClick={() => onSelect(item.name)}
+                  >
+                    {item.name} ▾
+                  </button>
+                ) : (
+                  item.name
+                )}
               </span>
               <strong>
                 {money(item.value)} 元{" "}
@@ -172,13 +191,13 @@ export function AllocationChart({
         </ul>
       </div>
       <p className="hint">
-        扇形依正向分配額繪製，總分配 NT$ {money(total)}；本月收入 NT${" "}
+        扇形依七類正向金額繪製，七類合計 NT$ {money(total)}；本月收入 NT${" "}
         {money(income)}。
         {deficit > 0
           ? "支出已超過收入，缺口另列，不以負值切片或虛構收入平衡。"
           : "含剩餘可支配金額。"}
         圖例比例以稅後月收入為分母，超支時加總可能超過 100%；收入為 0
-        時不計比例。剩餘負值於圖下另列，未填入的支出不另行假設分類。其他生活支出包含選填的購入後額外持有成本。
+        時不計比例。剩餘負值於圖下另列，未填入的支出不另行假設分類。購入後持有成本依用途計入生活支出；其他每月儲蓄另列，不含於七類切片。
       </p>
     </>
   );

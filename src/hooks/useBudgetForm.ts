@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { parseNumericInput } from "../lib/numberInput";
+import { useNumericDrafts } from "./useNumericDrafts";
 import {
   BUDGET_STORAGE_KEY,
   restoreBudget,
   sanitiseBudgetValues,
-  draftAmount,
 } from "../lib/budgetStorage";
 import type { Values } from "../components/ui";
 export function useBudgetForm(initial: Values) {
@@ -22,12 +21,14 @@ export function useBudgetForm(initial: Values) {
     loaded.error
       ? "無法讀取本機暫存，仍可繼續試算。"
       : loaded.restored
-        ? "已恢復此瀏覽器的家庭資料。"
+        ? "migrated" in loaded && loaded.migrated
+          ? "已保留舊表單，快速總額已另存換算；原始金額與明細均保留，請確認來源。"
+          : "已恢復此瀏覽器的家庭資料。"
         : "編輯後會自動暫存於此瀏覽器。",
   );
-  const saved = useRef(loaded.values),
-    lastEtf = useRef(draftAmount(loaded.values.etfMonthly, 0));
-  lastEtf.current = draftAmount(values.etfMonthly, lastEtf.current);
+  const saved = useRef(loaded.values);
+  const numbers = useNumericDrafts(values, defaults.current);
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (!dirty) return;
     const snapshot = sanitiseBudgetValues(
@@ -60,13 +61,19 @@ export function useBudgetForm(initial: Values) {
     },
     reset: () => {
       setDirty(true);
+      numbers.resetNumbers();
+      setRevision((n) => n + 1);
       setValues(defaults.current);
     },
-    n: (key: string) => parseNumericInput(values[key]),
-    etfForCalculation: lastEtf.current,
+    n: numbers.n,
+    registerNumber: numbers.registerNumber,
+    revision,
+    etfForCalculation: numbers.n("etfMonthly"),
     storageStatus,
     clearSaved: () => {
       setDirty(false);
+      numbers.resetNumbers();
+      setRevision((n) => n + 1);
       setValues(defaults.current);
       saved.current = defaults.current;
       try {

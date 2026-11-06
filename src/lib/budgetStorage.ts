@@ -111,11 +111,33 @@ export function restoreBudget(
       Array.isArray(data.values)
     )
       throw new Error("Invalid snapshot");
-    return {
-      values: sanitiseBudgetValues(data.values, defaults),
-      restored: true,
-      error: false,
-    };
+    const values = sanitiseBudgetValues(data.values, defaults);
+    const migrated =
+      !("necessaryTotal" in data.values) && "necessaryTotal" in defaults;
+    if (migrated) {
+      let needs = 0,
+        wants = 0;
+      const oldBase = Number(values.living) || 0;
+      if (values.group_otherLiving === "wants") wants += oldBase;
+      else needs += oldBase;
+      for (const key of [
+        "medical",
+        "telecom",
+        "clothing",
+        "dining",
+        "parentSupport",
+        "subscriptions",
+      ]) {
+        const value = Number(values[key]) || 0;
+        const d = livingFields.find((x) => x.id === key)!;
+        const group = values[`group_${key}`] ?? d.group;
+        if (group === "wants") wants += value;
+        else needs += value;
+      }
+      values.necessaryTotal = String(needs);
+      values.discretionaryTotal = String(wants);
+    }
+    return { values, restored: true, error: false, migrated };
   } catch {
     return { values: defaults, restored: false, error: true };
   }

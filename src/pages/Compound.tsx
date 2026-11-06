@@ -1,11 +1,15 @@
+import {
+  PortfolioAsset,
+  portfolioInitial,
+  portfolioDefaults,
+} from "../components/PortfolioAsset";
+import { useLastValidResult } from "../hooks/useNumericDrafts";
 import { investment, money } from "../lib/finance";
 import {
   useForm,
   Field,
+  Select,
   Details,
-  Asset,
-  initialAsset,
-  assetDefaults,
   Toggle,
   Stat,
   Breakdown,
@@ -19,7 +23,9 @@ import {
 } from "../components/ui";
 export default function Compound() {
   const f = useForm({
-    ...assetDefaults,
+    ...portfolioDefaults,
+    years: "30",
+    axisMode: "full",
     monthly: "5000",
     annual: "8",
     bank: "1.5",
@@ -28,7 +34,7 @@ export default function Compound() {
     nextMonthly: "8000",
   });
   const result = safely(() => {
-    const initial = initialAsset(f),
+    const initial = portfolioInitial(f),
       change = f.values.change === "yes";
     if (
       change &&
@@ -37,21 +43,26 @@ export default function Compound() {
         f.n("changeYear") > 30)
     )
       throw new Error("調整投入起始年需為 2～30 整數");
+    const years = f.n("years");
     const input = {
       initial,
       monthly: f.n("monthly"),
       annual: f.n("annual") / 100,
-      months: 360,
+      months: years * 12,
       changeMonth: change ? (f.n("changeYear") - 1) * 12 + 1 : undefined,
       nextMonthly: change ? f.n("nextMonthly") : undefined,
     };
     const etf = investment(input),
       bank = investment({ ...input, annual: f.n("bank") / 100 }),
-      delays = [0, 60, 120].map(
-        (delayMonths) => investment({ ...input, delayMonths }).at(-1)!,
-      );
+      delays = [0, 60, 120]
+        .filter((d) => d <= years * 12)
+        .map((delayMonths) => ({
+          ...investment({ ...input, delayMonths }).at(-1)!,
+          delayMonths,
+        }));
     return {
       initial,
+      years,
       etf,
       bank,
       delays,
@@ -59,7 +70,7 @@ export default function Compound() {
       chart: etf.map((x, i) => ({ ...x, bank: bank[i].value })),
     };
   });
-  const r = result.data;
+  const r = useLastValidResult(result, f.revision);
   return (
     <div className="workspace">
       <section className="panel inputs">
@@ -90,7 +101,16 @@ export default function Compound() {
           8% 僅為教育性假設，並非 0050、006208 或其他 ETF
           的保證報酬。你可以自行調整。
         </p>
-        <Asset form={f} />
+        <Field
+          form={f}
+          name="years"
+          label="投資年數"
+          unit="年"
+          min={1}
+          max={40}
+          step={1}
+        />
+        <PortfolioAsset form={f} />
         <Details title="進階設定">
           <Toggle form={f} name="change">
             中途調整每月投入
@@ -110,21 +130,24 @@ export default function Compound() {
             </>
           )}
         </Details>
+        <ErrorNotice message={result.error} />
+        <p className="hint">
+          可先清空再輸入；暫時無效時保留有效試算，完成後在欄位旁提示。
+        </p>
         <Actions
           reset={f.reset}
           summary={
             r
-              ? `長期複利：30年預估市值 NT$ ${money(r.end.value)}，本金 ${money(r.end.principal)}，假設收益 ${money(r.end.gain)}；同額同時點銀行存款 ${money(r.bank.at(-1)!.value)}。非報酬保證。`
+              ? `長期複利：${r.years}年預估市值 NT$ ${money(r.end.value)}，本金 ${money(r.end.principal)}，假設收益 ${money(r.end.gain)}；同額同時點銀行存款 ${money(r.bank.at(-1)!.value)}。非報酬保證。`
               : ""
           }
         />
       </section>
       <section className="results" aria-label="長期複利結果">
-        <ErrorNotice message={result.error} />
         {r && (
           <>
             <div className="hero-result">
-              <span className="result-badge">30 年的累積想像</span>
+              <span className="result-badge">{r.years} 年的累積想像</span>
               <Stat label="預估總資產" value={r.end.value} />
               <p>不是預測未來，而是看懂本金、時間與假設報酬的關係。</p>
               <div className="hero-stats">
@@ -133,17 +156,20 @@ export default function Compound() {
               </div>
             </div>
             <div className="milestones">
-              {[10, 20, 30].map((y) => (
-                <div className="panel" key={y}>
-                  <span className="eyebrow">{y} 年後</span>
-                  <Stat small label="ETF 模擬市值" value={r.etf[y].value} />
-                  <p>
-                    本金 {money(r.etf[y].principal)} 元<br />
-                    假設收益 {money(r.etf[y].gain)} 元<br />
-                    銀行 {money(r.bank[y].value)} 元
-                  </p>
-                </div>
-              ))}
+              {[...new Set([10, 20, 30, r.years])]
+                .filter((y) => y <= r.years)
+                .sort((a, b) => a - b)
+                .map((y) => (
+                  <div className="panel" key={y}>
+                    <span className="eyebrow">{y} 年後</span>
+                    <Stat small label="ETF 模擬市值" value={r.etf[y].value} />
+                    <p>
+                      本金 {money(r.etf[y].principal)} 元<br />
+                      假設收益 {money(r.etf[y].gain)} 元<br />
+                      銀行 {money(r.bank[y].value)} 元
+                    </p>
+                  </div>
+                ))}
             </div>
             <div className="panel">
               <h3>本金與收益的比例</h3>
@@ -158,7 +184,22 @@ export default function Compound() {
             </div>
             <Details>
               <h3>三條曲線，一起比較</h3>
+              <Select
+                form={f}
+                name="axisMode"
+                label="Y 軸顯示模式"
+                options={[
+                  ["full", "完整金額模式（從0元開始）"],
+                  ["focused", "聚焦資產變化模式"],
+                ]}
+              />
+              {f.values.axisMode === "focused" && (
+                <p className="reference-disclaimer">
+                  此模式會調整縱軸起點，以便觀察變化幅度；視覺差距可能因此放大。
+                </p>
+              )}
               <Chart
+                axisMode={f.values.axisMode as "full" | "focused"}
                 data={r.chart}
                 lines={[
                   ["value", "ETF 模擬市值", "#20745f"],
@@ -177,17 +218,24 @@ export default function Compound() {
               />
               <h3>如果晚 10 年才開始？</h3>
               <Rows
-                headers={["開始時間", "累積本金", "30年終點市值", "假設收益"]}
-                rows={r.delays.map((x, i) => [
-                  ["現在開始", "晚5年", "晚10年"][i],
+                headers={[
+                  "開始時間",
+                  "累積本金",
+                  `${r.years}年終點市值`,
+                  "假設收益",
+                ]}
+                rows={r.delays.map((x) => [
+                  x.delayMonths === 0
+                    ? "現在開始"
+                    : `晚${x.delayMonths / 12}年`,
                   money(x.principal),
                   money(x.value),
                   money(x.gain),
                 ])}
               />
               <p className="hint">
-                同一個 30 年觀察終點，晚 10 年僅有 20
-                年新增投入，因此本金不同，差距不能全部歸因於複利。延後期間不投入新本金，既有起始資產仍依假設增長；未投入款項不計現金利息。相同總本金的公平比較將於第三階段加入。
+                同一個 {r.years} 年觀察終點，延後開始會縮短新增投入的
+                年數，因此本金不同，差距不能全部歸因於複利。延後期間不投入新本金，既有起始資產仍依假設增長；未投入款項不計現金利息。相同總本金的公平比較將於第三階段加入。
               </p>
             </Details>
             <Risk />

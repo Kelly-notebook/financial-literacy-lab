@@ -55,7 +55,7 @@ describe("新增支出與共同分類帳", () => {
     expect(forecast(input, 24).every((x) => x.remaining === 80000)).toBe(true);
     expect(h.groups.find((x) => x.id === "needs")!.value).toBe(14000);
     expect(h.groups.find((x) => x.id === "wants")!.value).toBe(6000);
-    expect(items.map((x) => x.name)).toEqual(
+    expect(entries.map((x) => x.name)).toEqual(
       expect.arrayContaining(["治裝費", "餐廳與日常娛樂", "孝親費", "醫藥費"]),
     );
     expect(h.total + r.remaining).toBe(r.income);
@@ -83,7 +83,7 @@ describe("新增支出與共同分類帳", () => {
       entries = budgetEntries(p, r),
       items = allocations(entries, r.remaining);
     expect(items.find((x) => x.name === "大型購物儲蓄")!.value).toBe(10000);
-    expect(items.find((x) => x.name === "旅遊基金儲蓄")!.value).toBe(5000);
+    expect(items.find((x) => x.name === "旅遊基金")!.value).toBe(5000);
     const h = healthCheck(entries, r.income, { purchase: "savings" });
     expect(h.groups.find((x) => x.id === "savings")!.value).toBe(10000);
     expect(h.groups.find((x) => x.id === "wants")!.value).toBe(5000);

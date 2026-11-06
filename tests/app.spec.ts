@@ -53,12 +53,20 @@ test("非法與空值顯示錯誤，不出現 NaN/Infinity", async ({ page }) =>
     .locator(".workspace:visible")
     .getByLabel("目標資產", { exact: true })
     .fill("");
+  await page
+    .locator(".workspace:visible")
+    .getByLabel("目標資產", { exact: true })
+    .press("Tab");
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.locator("main")).not.toContainText(/NaN|Infinity/);
   await page
     .locator(".workspace:visible")
     .getByLabel("目標資產", { exact: true })
     .fill("100000000000000");
+  await page
+    .locator(".workspace:visible")
+    .getByLabel("目標資產", { exact: true })
+    .press("Tab");
   await expect(page.getByRole("alert")).toBeVisible();
   await page
     .locator(".workspace:visible")

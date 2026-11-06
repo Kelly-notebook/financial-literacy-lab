@@ -10,26 +10,8 @@ export const groupNames: Record<Group, string> = {
   wants: "非必要消費",
   savings: "儲蓄與財務目標",
 };
-export const livingFields = [
-  { id: "food", name: "伙食", color: "#71917a", group: "needs", cap: 15 },
-  { id: "child", name: "育兒與家庭", color: "#a7bc94", group: "needs" },
-  { id: "insurance", name: "保險", color: "#8488a7", group: "needs", cap: 10 },
-  { id: "transport", name: "交通", color: "#789ca4", group: "needs", cap: 10 },
-  { id: "utilities", name: "水電", color: "#b7aa7b", group: "needs", cap: 5 },
-  { id: "telecom", name: "電信費", color: "#9b9ac3", group: "needs", cap: 3 },
-  {
-    id: "subscriptions",
-    name: "工具與娛樂訂閱",
-    color: "#c397a6",
-    group: "wants",
-    cap: 5,
-  },
-  { id: "clothing", name: "治裝費", color: "#af91a8", group: "wants" },
-  { id: "dining", name: "餐廳與日常娛樂", color: "#d2aa8c", group: "wants" },
-  { id: "parentSupport", name: "孝親費", color: "#a6a1c1", group: "wants" },
-  { id: "medical", name: "醫藥費", color: "#82aaa3", group: "needs" },
-  { id: "otherLiving", name: "其他生活支出", color: "#91a38b", group: "needs" },
-] as const;
+export { livingFields } from "./living";
+import { livingFields } from "./living";
 export const detailLimits = {
   food: 15,
   insurance: 10,
@@ -50,6 +32,7 @@ export interface BudgetEntry {
   value: number;
   color: string;
   group: Group;
+  flow?: "living";
 }
 /** A single-entry ledger is shared by the donut and 50/30/20. The remainder is deliberately excluded from savings. */
 export function budgetEntries(
@@ -57,32 +40,41 @@ export function budgetEntries(
   row: BudgetRow,
   details?: LivingDetails,
 ): BudgetEntry[] {
-  const living: BudgetEntry[] = details
-    ? livingFields
-        .filter(
-          (x) => !(separateExpenseKeys as readonly string[]).includes(x.id),
-        )
-        .map((x) => ({
-          ...x,
-          value: bounded(details[x.id as keyof LivingDetails], x.name),
-        }))
-    : [
-        {
-          id: "otherLiving",
-          name: "其他生活支出（總額）",
-          value: row.baseLiving,
-          color: "#91a38b",
-          group: "needs",
-        },
-      ];
+  const living: BudgetEntry[] = input.livingMode
+    ? row.livingEntries
+    : details
+      ? livingFields
+          .filter(
+            (x) => !(separateExpenseKeys as readonly string[]).includes(x.id),
+          )
+          .map((x) => ({
+            ...x,
+            value: bounded(details[x.id as keyof LivingDetails] ?? 0, x.name),
+            flow: "living",
+          }))
+      : [
+          {
+            id: "otherLiving",
+            name: "其他生活支出（總額）",
+            value: row.baseLiving,
+            color: "#91a38b",
+            group: "needs",
+            flow: "living",
+          },
+        ];
   return [
     ...living,
-    ...livingFields
-      .filter((x) => (separateExpenseKeys as readonly string[]).includes(x.id))
-      .map((x) => ({
-        ...x,
-        value: input[x.id as (typeof separateExpenseKeys)[number]] ?? 0,
-      })),
+    ...(input.livingMode
+      ? []
+      : livingFields
+          .filter((x) =>
+            (separateExpenseKeys as readonly string[]).includes(x.id),
+          )
+          .map((x) => ({
+            ...x,
+            value: input[x.id as (typeof separateExpenseKeys)[number]] ?? 0,
+            flow: "living" as const,
+          }))),
     {
       id: "loans",
       name: "貸款（房貸、車貸、信貸等）",
@@ -91,6 +83,7 @@ export function budgetEntries(
       group: "needs",
     },
     {
+      flow: "living",
       id: "purchaseCost",
       name: "購入後額外持有成本",
       value: row.purchaseCost,
@@ -132,46 +125,38 @@ export interface Allocation {
   value: number;
   color: string;
 }
+export function entryGroup(
+  e: BudgetEntry,
+  categories: Record<string, Group> = {},
+) {
+  const group = categories[e.id] ?? e.group;
+  return e.flow === "living"
+    ? group === "wants"
+      ? "wants"
+      : e.group === "wants" && group === "savings"
+        ? "wants"
+        : "needs"
+    : group;
+}
 export function allocations(
   entries: BudgetEntry[],
   remaining: number,
+  categories: Record<string, Group> = {},
 ): Allocation[] {
-  const byId = new Map(entries.map((e) => [e.id, e]));
-  const living = livingFields.map((f) => ({
-    name:
-      f.id === "otherLiving"
-        ? (byId.get("otherLiving")?.name ?? f.name)
-        : f.name,
-    value:
-      (byId.get(f.id)?.value ?? 0) +
-      (f.id === "otherLiving" ? (byId.get("purchaseCost")?.value ?? 0) : 0),
-    color: f.color,
-  }));
+  const sum = (id: string) => entries.find((e) => e.id === id)?.value ?? 0;
+  const costs = (group: Group) =>
+    entries
+      .filter((e) => e.flow === "living" && entryGroup(e, categories) === group)
+      .reduce((s, e) => s + e.value, 0);
   return [
-    ...living,
-    {
-      name: "貸款（房貸、車貸、信貸等）",
-      value: byId.get("loans")?.value ?? 0,
-      color: "#b48958",
-    },
-    {
-      name: "大型購物儲蓄",
-      value: byId.get("purchase")?.value ?? 0,
-      color: "#c6ad77",
-    },
-    {
-      name: "旅遊基金儲蓄",
-      value: byId.get("travel")?.value ?? 0,
-      color: "#8fa9b5",
-    },
-    {
-      name: "其他儲蓄",
-      value: byId.get("saving")?.value ?? 0,
-      color: "#9287a4",
-    },
-    { name: "ETF 投資", value: byId.get("etf")?.value ?? 0, color: "#216b53" },
-    { name: "剩餘金錢", value: Math.max(0, remaining), color: "#c8d9bf" },
-  ].filter((x) => x.value > 0);
+    { name: "必要生活支出", value: costs("needs"), color: "#397a5e" },
+    { name: "非必要消費", value: costs("wants"), color: "#bc8f61" },
+    { name: "貸款", value: sum("loans"), color: "#9b849e" },
+    { name: "大型購物儲蓄", value: sum("purchase"), color: "#b8a15b" },
+    { name: "旅遊基金", value: sum("travel"), color: "#7099ad" },
+    { name: "ETF 投資", value: sum("etf"), color: "#246a63" },
+    { name: "剩餘可支配金額", value: Math.max(0, remaining), color: "#b7c9a5" },
+  ];
 }
 export function detailComparison(
   income: number,
@@ -251,7 +236,7 @@ export function healthCheck(
     if (seen.has(e.id)) throw new Error("收支項目不可重複計入");
     seen.add(e.id);
     bounded(e.value, e.name, 0, Number.MAX_VALUE);
-    const group = categories[e.id] ?? e.group;
+    const group = entryGroup(e, categories);
     if (!Object.hasOwn(sums, group)) throw new Error("請選擇有效的支出分類");
     sums[group] += e.value;
   });

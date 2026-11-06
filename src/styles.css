@@ -1462,3 +1462,57 @@ h3:not(:first-child) {
   font-weight: 650;
   color: #32694c;
 }
+
+.holding-card {
+  border: 1px solid #dce5d7;
+  border-radius: 10px;
+  padding: 17px;
+  margin: 16px 0;
+  min-width: 0;
+}
+.holding-card legend {
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.holding-card p {
+  font-size: 12px;
+}
+.monthly-deficit {
+  background: #fff0f3;
+  color: #aa3c61 !important;
+  padding: 13px;
+  border: 1px solid #eabac9;
+  border-radius: 8px;
+  font-size: 15px !important;
+  font-weight: 650;
+}
+.ring-reconciliation {
+  background: #f1f5ed;
+  border-radius: 8px;
+  padding: 13px;
+  margin: 12px 0;
+}
+.ring-reconciliation p {
+  font-size: 11px;
+  margin: 5px 0;
+}
+.legend-button {
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: #397653;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: inherit;
+}
+.living-breakdown {
+  border-top: 1px solid #e1e7dc;
+  margin-top: 17px;
+  padding-top: 13px;
+}
+.living-inputs {
+  border-top: 1px solid #e1e7dc;
+  margin-top: 16px;
+  padding-top: 6px;
+}

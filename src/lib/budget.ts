@@ -1,3 +1,4 @@
+import { livingFields, type LivingCost, type LivingGroup } from "./living";
 import { bounded } from "./finance";
 export interface Loan {
   payment: number;
@@ -33,6 +34,12 @@ export const separateExpenseKeys = [
   "medical",
 ] as const;
 export interface BudgetInput extends Income {
+  livingMode?: "total" | "detail";
+  necessaryTotal?: number;
+  discretionaryTotal?: number;
+  livingDetails?: Record<string, number>;
+  livingCategories?: Record<string, LivingGroup>;
+
   clothing?: number;
   dining?: number;
   parentSupport?: number;
@@ -56,7 +63,13 @@ export interface BudgetInput extends Income {
   subscriptions: number;
   saving: number;
   startMonth: string;
-  change?: { month: number; employmentMonthly: number; living: number };
+  change?: {
+    month: number;
+    employmentMonthly: number;
+    living: number;
+    necessaryLiving?: number;
+    discretionaryLiving?: number;
+  };
 }
 function monthInteger(v: number, label: string, min = 1, max = 600) {
   bounded(v, label, min, max);
@@ -115,6 +128,45 @@ export function purchaseDuration(months: number | null) {
       ? "目前資金已達標"
       : `預計 ${Math.floor(months / 12)} 年 ${months % 12} 個月後達標`;
 }
+export function resolveLiving(
+  input: BudgetInput,
+  changed = false,
+): LivingCost[] {
+  const quick = (needs: number, wants: number): LivingCost[] => [
+    {
+      id: "quickNeeds",
+      name: "必要生活費總額",
+      group: "needs",
+      value: bounded(needs, "必要生活費總額"),
+      color: "#71917a",
+      flow: "living",
+    },
+    {
+      id: "quickWants",
+      name: "非必要消費總額",
+      group: "wants",
+      value: bounded(wants, "非必要消費總額"),
+      color: "#bf956e",
+      flow: "living",
+    },
+  ];
+  if (input.livingMode) {
+    if (changed && input.change)
+      return quick(
+        input.change.necessaryLiving ?? input.change.living,
+        input.change.discretionaryLiving ?? 0,
+      );
+    if (input.livingMode === "total")
+      return quick(input.necessaryTotal!, input.discretionaryTotal!);
+    return livingFields.map((field) => ({
+      ...field,
+      group: input.livingCategories?.[field.id] ?? field.group,
+      value: bounded(input.livingDetails?.[field.id] ?? 0, field.name),
+      flow: "living",
+    }));
+  }
+  return [];
+}
 export function budget(input: BudgetInput, month = 1) {
   const annualEmployment = employmentAnnual(input);
   for (const [label, v] of Object.entries(input))
@@ -127,8 +179,25 @@ export function budget(input: BudgetInput, month = 1) {
         "purchaseMonths",
         "purchaseMonthly",
       ].includes(label)
-    )
+    ) {
+      if (
+        input.livingMode &&
+        ![
+          "otherIncome",
+          "investmentCash",
+          "purchasePrice",
+          "purchaseFund",
+          "purchaseCost",
+          "travelPrice",
+          "travelFund",
+          "travelMonths",
+          "etfMonthly",
+          "saving",
+        ].includes(label)
+      )
+        continue;
       bounded(v, label);
+    }
 
   monthInteger(input.travelMonths, "旅行間隔");
   input.loans.forEach((l) => {
@@ -146,9 +215,11 @@ export function budget(input: BudgetInput, month = 1) {
     ? input.change!.employmentMonthly
     : annualEmployment / 12;
   const baseLiving = changed ? input.change!.living : input.living;
-  const living =
-    baseLiving +
-    separateExpenseKeys.reduce((sum, key) => sum + (input[key] ?? 0), 0);
+  const livingEntries = resolveLiving(input, !!changed);
+  const living = input.livingMode
+    ? livingEntries.reduce((sum, e) => sum + e.value, 0)
+    : baseLiving +
+      separateExpenseKeys.reduce((sum, key) => sum + (input[key] ?? 0), 0);
   const cashMonthly =
     input.cashTreatment === "spend" ? input.investmentCash / 12 : 0;
   const income = employmentMonthly + input.otherIncome + cashMonthly;
@@ -194,6 +265,7 @@ export function budget(input: BudgetInput, month = 1) {
     cashMonthly,
     living,
     baseLiving,
+    livingEntries,
     loan,
     purchase,
     purchaseCost,

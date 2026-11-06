@@ -54,6 +54,15 @@ export default function Budget({
     investmentCash: "0",
     cashTreatment: "exclude",
     living: "15000",
+    necessaryTotal: "15000",
+    discretionaryTotal: "0",
+    rent: "0",
+    householdGoods: "0",
+    education: "0",
+    homeRepair: "0",
+    gifts: "0",
+    beauty: "0",
+    fitness: "0",
     livingMode: "total",
     food: "6000",
     child: "0",
@@ -103,6 +112,7 @@ export default function Budget({
     changeMonth: "13",
     changeIncome: "50000",
     changeLiving: "15000",
+    changeWants: "0",
   });
   const incomeInput = (): Income => ({
     mode: f.values.mode as Income["mode"],
@@ -126,29 +136,22 @@ export default function Budget({
   };
   const result = safely(() => {
     const details = f.values.livingMode === "detail";
-    const parts = {
-      food: f.n("food"),
-      child: f.n("child"),
-      insurance: f.n("insurance"),
-      transport: f.n("transport"),
-      utilities: f.n("utilities"),
-      otherLiving: f.n("otherLiving"),
-    };
-    if (
-      details &&
-      [
-        "food",
-        "insurance",
-        "utilities",
-        "child",
-        "transport",
-        "otherLiving",
-      ].some((k) => !Number.isFinite(f.n(k)) || f.n(k) < 0 || f.n(k) > 1e12)
-    )
-      throw new Error("生活費明細需為 0～1兆的有效金額");
+    const parts = Object.fromEntries(
+      livingFields.map((field) => [field.id, f.n(field.id)]),
+    );
+    const categories = Object.fromEntries(
+      livingFields.map((field) => [
+        field.id,
+        f.values[`group_${field.id}`] === "wants"
+          ? "wants"
+          : f.values[`group_${field.id}`] === "needs"
+            ? "needs"
+            : field.group,
+      ]),
+    ) as Record<string, "needs" | "wants">;
     const living = details
       ? Object.values(parts).reduce((sum, v) => sum + v, 0)
-      : f.n("living");
+      : f.n("necessaryTotal") + f.n("discretionaryTotal");
     if (
       !Number.isInteger(f.n("forecastYears")) ||
       f.n("forecastYears") < 1 ||
@@ -161,6 +164,11 @@ export default function Budget({
       investmentCash: f.n("investmentCash"),
       cashTreatment: f.values.cashTreatment as BudgetInput["cashTreatment"],
       living,
+      livingMode: f.values.livingMode as "total" | "detail",
+      necessaryTotal: f.n("necessaryTotal"),
+      discretionaryTotal: f.n("discretionaryTotal"),
+      livingDetails: parts,
+      livingCategories: categories,
       loans: loanFields.map(([p, m]) => ({ payment: f.n(p), months: f.n(m) })),
       purchaseMode: f.values.purchaseMode as "deadline" | "monthly",
       purchasePrice: f.n("purchasePrice"),
@@ -186,6 +194,8 @@ export default function Budget({
               month: f.n("changeMonth"),
               employmentMonthly: f.n("changeIncome"),
               living: f.n("changeLiving"),
+              necessaryLiving: f.n("changeLiving"),
+              discretionaryLiving: f.n("changeWants"),
             }
           : undefined,
     };
@@ -193,14 +203,11 @@ export default function Budget({
       monthly = forecast(input, f.n("forecastYears") * 12),
       annual = annualForecast(monthly),
       year = forecast(input, 12),
-      entries = budgetEntries(
-        input,
-        current,
-        details && !(input.change && input.change.month === 1)
-          ? parts
-          : undefined,
-      );
-    const items = allocations(entries, current.remaining);
+      entries = budgetEntries(input, current);
+    const allCategories = Object.fromEntries(
+      entries.map((e) => [e.id, f.values[`group_${e.id}`] ?? e.group]),
+    ) as Record<string, import("../lib/health").Group>;
+    const items = allocations(entries, current.remaining, allCategories);
     return {
       input,
       current,
@@ -294,63 +301,65 @@ export default function Budget({
             只填實際現金收入，不含股票未實現價差。股息不保證且可能變動；平均月額不代表每月都有配息，再投入與可支配現金不可重複計入。
           </p>
         </Details>
-        <fieldset className="expense-section">
-          <legend>必要生活費與其他生活支出</legend>
-          <Select
-            form={f}
-            name="livingMode"
-            label="必要生活費輸入方式"
-            options={[
-              ["total", "快速輸入總額"],
-              ["detail", "展開生活費明細"],
-            ]}
-          />
-          {f.values.livingMode === "detail" && (
-            <div className="field-grid">
-              {livingFields
-                .filter((x) =>
-                  [
-                    "food",
-                    "child",
-                    "insurance",
-                    "transport",
-                    "utilities",
-                  ].includes(x.id),
-                )
-                .map(({ id, name }) => (
-                  <Field key={id} form={f} name={id} label={name} />
-                ))}
-            </div>
-          )}
-          <div className="field-grid">
-            <Field form={f} name="medical" label="醫藥費" />
-            <Field form={f} name="telecom" label="電信費" />
-          </div>
+        <section className="living-inputs" aria-label="生活費輸入">
           {f.values.livingMode === "total" ? (
-            <Field
-              form={f}
-              name="living"
-              label="其他生活支出總額（含伙食等，獨立項目另填）"
-            />
+            <fieldset className="expense-section">
+              <legend>生活費快速輸入</legend>
+              <Field
+                form={f}
+                name="necessaryTotal"
+                label="每月必要生活費總額"
+              />
+              <Field
+                form={f}
+                name="discretionaryTotal"
+                label="每月非必要消費總額"
+              />
+              <button
+                className="scenario-button"
+                onClick={() => f.set("livingMode", "detail")}
+              >
+                展開生活費明細
+              </button>
+            </fieldset>
           ) : (
-            <Field form={f} name="otherLiving" label="其他生活支出" />
+            <>
+              <fieldset className="expense-section">
+                <legend>必要生活支出</legend>
+                {livingFields
+                  .filter((x) => x.group === "needs")
+                  .map((x) => (
+                    <Field key={x.id} form={f} name={x.id} label={x.name} />
+                  ))}
+              </fieldset>
+              <fieldset className="expense-section">
+                <legend>非必要消費</legend>
+                {livingFields
+                  .filter((x) => x.group === "wants")
+                  .map((x) => (
+                    <Field key={x.id} form={f} name={x.id} label={x.name} />
+                  ))}
+              </fieldset>
+              <button
+                className="scenario-button"
+                onClick={() => f.set("livingMode", "total")}
+              >
+                切換快速輸入
+              </button>
+            </>
           )}
           <p className="hint">
-            總額與伙食等明細擇一。醫藥、電信及下方非必要消費另填，勿再包含於總額。其他生活支出若含非必要消費，可在健檢調整分類。
+            目前採用{f.values.livingMode === "total" ? "快速總額" : "19項明細"}
+            作為唯一生活費來源。快速合計 NT${" "}
+            {money(f.n("necessaryTotal") + f.n("discretionaryTotal"))}
+            ；另存明細合計 NT${" "}
+            {money(livingFields.reduce((sum, x) => sum + f.n(x.id), 0))}
+            。兩組資料獨立保留，切換不相加、不改寫或補差額。
           </p>
-        </fieldset>
-        <fieldset className="expense-section">
-          <legend>非必要消費（可依用途調整）</legend>
-          <div className="field-grid">
-            <Field form={f} name="clothing" label="治裝費" />
-            <Field form={f} name="dining" label="餐廳與日常娛樂" />
-            <Field form={f} name="parentSupport" label="孝親費" />
-            <Field form={f} name="subscriptions" label="工具與娛樂訂閱" />
-          </div>
           <p className="hint">
-            工作必需服裝或必要扶養費可改歸必要支出；健檢分類可由你調整。伙食與餐廳／娛樂請分開填寫，避免同一筆餐費填兩次。
+            以上是預設介面分組；孝親、教育、居家維修與治裝等項目可在健檢按用途調整必要／非必要分類。
           </p>
-        </fieldset>
+        </section>
         <Details title="貸款設定：房貸、車貸、信貸、其他">
           {loanFields.map(([p, m, label]) => (
             <div className="field-grid" key={p}>
@@ -474,7 +483,12 @@ export default function Budget({
               <Field
                 form={f}
                 name="changeLiving"
-                label="變動後每月生活費（不含電信與訂閱）"
+                label="變動後每月必要生活費總額"
+              />
+              <Field
+                form={f}
+                name="changeWants"
+                label="變動後每月非必要消費總額"
               />
             </>
           )}
@@ -482,6 +496,7 @@ export default function Budget({
             其他固定收入及投資現金收入維持原設定。這是可調整的情境，不是薪資或家庭支出的預測。
           </p>
         </Details>
+        <ErrorNotice message={r ? result.error : undefined} />
         <Actions
           reset={() => {
             lastValid.current = undefined;
@@ -495,7 +510,6 @@ export default function Budget({
         />
       </section>
       <section className="results" aria-label="家庭預算結果">
-        <ErrorNotice message={result.error} />
         {result.error && r && (
           <p className="hint">
             輸入尚待修正，畫面暫沿用最近一次有效試算；欄位與圖表均保留。
@@ -545,7 +559,7 @@ export default function Budget({
                   ["其他每月固定收入", r.input.otherIncome],
                   ["投資現金收入（月平均，僅計納入部分）", c.cashMonthly],
                   [
-                    "每月生活支出（含電信、訂閱與購入後成本）",
+                    "每月生活支出（採用中的來源與購入後成本）",
                     c.living + c.purchaseCost,
                   ],
                   ["每月貸款支出", c.loan],

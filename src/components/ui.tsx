@@ -24,16 +24,26 @@ import {
   formatMoneyInput,
   editMoneyInput,
 } from "../lib/numberInput";
+import { chartDomain, twdAxis } from "../lib/portfolio";
+import { useNumericDrafts } from "../hooks/useNumericDrafts";
 export type Values = Record<string, string>;
 export function useForm(initial: Values) {
   const [values, setValues] = useState(initial);
+  const [revision, setRevision] = useState(0);
+  const numbers = useNumericDrafts(values, initial);
   return {
     values,
     set: (key: string, value: string) =>
       setValues((v) => ({ ...v, [key]: value })),
     patch: (patch: Values) => setValues((v) => ({ ...v, ...patch })),
-    reset: () => setValues(initial),
-    n: (key: string) => parseNumericInput(values[key]),
+    reset: () => {
+      numbers.resetNumbers();
+      setRevision((n) => n + 1);
+      setValues(initial);
+    },
+    revision,
+    n: numbers.n,
+    registerNumber: numbers.registerNumber,
   };
 }
 export type Form = ReturnType<typeof useForm>;
@@ -45,7 +55,7 @@ export function Field({
   min = 0,
   max = 1e12,
   step = "any",
-  validateOnBlur = false,
+  validateOnBlur = true,
 }: {
   form: Form;
   name: string;
@@ -56,6 +66,7 @@ export function Field({
   step?: number | string;
   validateOnBlur?: boolean;
 }) {
+  form.registerNumber(name, { min, max, integer: step === 1 });
   const id = useId();
   const [focused, setFocused] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -78,7 +89,7 @@ export function Field({
       pendingCaret.current = null;
     }
   });
-  const v = form.n(name),
+  const v = parseNumericInput(form.values[name]),
     invalid =
       !Number.isFinite(v) ||
       v < min ||
@@ -93,8 +104,8 @@ export function Field({
           id={id}
           aria-label={label}
           ref={inputRef}
-          type={isMoney ? "text" : "number"}
-          inputMode="decimal"
+          type="text"
+          inputMode={step === 1 ? "numeric" : "decimal"}
           min={min}
           max={max}
           step={step}
@@ -115,8 +126,6 @@ export function Field({
           onBlur={() => {
             setFocused(false);
             setFinished(true);
-            if (validateOnBlur && form.values[name]?.trim() === "")
-              form.set(name, "0");
           }}
           onKeyDown={(e) => {
             if (validateOnBlur && e.key === "Enter") e.currentTarget.blur();
@@ -134,7 +143,7 @@ export function Field({
         >
           請輸入 {money(min)}～{money(max)}
           {step === 1 ? " 的整數" : ""}
-          {validateOnBlur && "；試算暫用最近一次有效金額，請修正此欄位。"}
+          {validateOnBlur && "；試算保留有效結果，請完成或修正此欄位。"}
         </small>
       )}
     </label>
@@ -367,11 +376,20 @@ export function Chart({
   data,
   lines,
   bar = false,
+  axisMode,
 }: {
   data: Record<string, number | boolean>[];
   lines: [string, string, string][];
   bar?: boolean;
+  axisMode?: "full" | "focused";
 }) {
+  const domain = axisMode
+    ? chartDomain(
+        data,
+        lines.map((l) => l[0]),
+        axisMode,
+      )
+    : undefined;
   const common = (
     <>
       <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="#e3eae5" />
@@ -383,10 +401,12 @@ export function Chart({
         minTickGap={24}
       />
       <YAxis
-        width={52}
+        width={72}
+        domain={domain}
+        allowDataOverflow={false}
         tickLine={false}
         axisLine={false}
-        tickFormatter={(v) => `${money(v / 10000)}萬`}
+        tickFormatter={twdAxis}
       />
       <Tooltip
         formatter={(v) => `NT$ ${money(Number(v))}`}
@@ -398,6 +418,9 @@ export function Chart({
   return (
     <div
       className="chart"
+      data-axis-mode={axisMode}
+      data-axis-min={domain?.[0]}
+      data-axis-max={domain?.[1]}
       role="img"
       aria-label={
         lines.map((l) => l[1]).join("、") + "逐年圖表，金額單位新臺幣"

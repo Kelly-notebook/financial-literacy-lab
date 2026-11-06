@@ -127,7 +127,7 @@ describe("共用單一分類帳與50／30／20", () => {
       h = healthCheck(entries, row.income);
     expect(h.groups.find((g) => g.id === "savings")!.value).toBe(15000);
     expect(h.total + row.remaining).toBe(row.income);
-    expect(items.reduce((s, x) => s + x.value, 0)).toBe(row.income);
+    expect(items.reduce((s, x) => s + x.value, 0) + p.saving).toBe(row.income);
     expect(items.find((x) => x.name === "ETF 投資")!.value).toBe(10000);
   });
   it("逐項對應伙食等明細，電信／訂閱與未來月額均只加一次", () => {
@@ -149,18 +149,23 @@ describe("共用單一分類帳與50／30／20", () => {
     const rows = forecast(p, 2);
     expect(rows[0].living).toBe(41000);
     expect(rows[1].living).toBe(41000);
-    expect(allocations(entries, row.remaining).map((x) => x.name)).toEqual(
+    expect(entries.map((x) => x.name)).toEqual(
       expect.arrayContaining([
         "伙食",
         "育兒與家庭",
-        "保險",
-        "交通",
-        "水電",
         "電信費",
         "工具與娛樂訂閱",
-        "其他生活支出",
       ]),
     );
+    expect(allocations(entries, row.remaining).map((x) => x.name)).toEqual([
+      "必要生活支出",
+      "非必要消費",
+      "貸款",
+      "大型購物儲蓄",
+      "旅遊基金",
+      "ETF 投資",
+      "剩餘可支配金額",
+    ]);
   });
   it("未拆生活費總額時不虛構伙食分類或細項超額", () => {
     const row = budget(input),
@@ -173,8 +178,8 @@ describe("共用單一分類帳與50／30／20", () => {
       row = budget(p);
     const items = allocations(budgetEntries(p, row), row.remaining);
     expect(row.remaining).toBe(-31000);
-    expect(items.every((x) => x.value > 0)).toBe(true);
-    expect(items.find((x) => x.name === "剩餘金錢")).toBeUndefined();
+    expect(items.every((x) => x.value >= 0)).toBe(true);
+    expect(items.find((x) => x.name === "剩餘可支配金額")!.value).toBe(0);
   });
   it("浮點小額生活費不因扣除已加總項目產生負分類", () => {
     const p = { ...input, living: 0, telecom: 0.7, subscriptions: 0.1 };

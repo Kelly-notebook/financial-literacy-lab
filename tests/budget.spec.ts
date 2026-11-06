@@ -2,7 +2,16 @@ import { test, expect, type Page } from "@playwright/test";
 async function open(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /家庭預算/ }).click();
-  return page.locator(".workspace:visible");
+  const ui = page.locator(".workspace:visible");
+  if (
+    await ui
+      .getByRole("button", { name: "展開生活費明細", exact: true })
+      .isVisible()
+  )
+    await ui
+      .getByRole("button", { name: "展開生活費明細", exact: true })
+      .click();
+  return ui;
 }
 test("月薪與年薪主要欄位互斥，切換保持相同全年收入並即時更新", async ({
   page,
@@ -44,6 +53,7 @@ test("金額分組、小數、負號、刪空、中間插入與逗號旁刪除",
   await expect(amount).toHaveValue("1,000,000.50");
   await amount.fill("-1000.25");
   await expect(amount).toHaveValue("-1,000.25");
+  await amount.press("Tab");
   await expect(amount).toHaveAttribute("aria-invalid", "true");
   await amount.fill("");
   await amount.pressSequentially("123456");
@@ -68,6 +78,7 @@ test("金額分組、小數、負號、刪空、中間插入與逗號旁刪除",
   await expect(amount).toHaveValue("1,000.25");
   await amount.fill("");
   await expect(amount).toHaveValue("");
+  await amount.press("Tab");
   await expect(ui.getByRole("alert")).toBeVisible();
   await expect(amount).toHaveAttribute("inputmode", "decimal");
 });
@@ -245,7 +256,7 @@ test("整合ETF金額預設0、10%快捷、環圈更新與取消獨立第五部�
 test("電信與訂閱同步現金流、健檢明細情境與參考上限可修正", async ({ page }) => {
   const ui = await open(page);
   await ui.getByLabel("每月固定實領薪資").fill("100000");
-  await ui.getByLabel("必要生活費輸入方式").selectOption("detail");
+
   await ui.getByLabel("伙食", { exact: true }).fill("18000");
   await ui.getByLabel("電信費", { exact: true }).fill("4000");
   await ui.getByLabel("工具與娛樂訂閱", { exact: true }).fill("6000");
@@ -259,12 +270,10 @@ test("電信與訂閱同步現金流、健檢明細情境與參考上限可修�
   await expect(
     ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
   ).toContainText("36,000");
-  await expect(
-    ui.locator(".allocation-legend li").filter({ hasText: "電信費" }),
-  ).toContainText("4,000");
-  await expect(
-    ui.locator(".allocation-legend li").filter({ hasText: "工具與娛樂訂閱" }),
-  ).toContainText("6,000");
+  await ui.getByRole("button", { name: "必要生活支出 ▾", exact: true }).click();
+  await expect(ui.locator(".living-breakdown")).toContainText("4,000");
+  await ui.getByRole("button", { name: "非必要消費 ▾", exact: true }).click();
+  await expect(ui.locator(".living-breakdown")).toContainText("6,000");
   await ui.getByText("展開詳細分析", { exact: true }).click();
   await ui.getByText("查看各期精確數據", { exact: true }).click();
   const first = ui.getByRole("row").nth(1);
@@ -273,6 +282,7 @@ test("電信與訂閱同步現金流、健檢明細情境與參考上限可修�
   await expect(first).toContainText("52,000");
   await ui.getByText("調整支出分類與參考上限", { exact: true }).click();
   await ui.getByLabel("伙食參考上限", { exact: true }).fill("");
+  await ui.getByLabel("伙食參考上限", { exact: true }).press("Tab");
   await expect(ui.getByRole("alert")).toBeVisible();
   await ui.getByLabel("伙食參考上限", { exact: true }).fill("20");
   await expect(ui.getByRole("alert")).toHaveCount(0);

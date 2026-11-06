@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { money as formatMoney } from "../lib/finance";
 import type { BudgetRow } from "../lib/budget";
 import {
   healthCheck,
+  entryGroup,
   investmentCheck,
   detailLimits,
   groupNames,
@@ -38,6 +40,7 @@ export function HouseholdHealth({
   entries: BudgetEntry[];
   items: Allocation[];
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const categories = Object.fromEntries(
     entries.map((e) => [e.id, f.values[`group_${e.id}`] ?? e.group]),
   ) as Record<string, Group>;
@@ -53,7 +56,51 @@ export function HouseholdHealth({
     <Details title="家庭收支健檢與投資規劃">
       <span className="eyebrow">03 / UNDERSTAND & PLAN</span>
       <h3>家庭收入都分配到哪裡？</h3>
-      <AllocationChart items={items} income={c.income} deficit={c.deficit} />
+      <AllocationChart
+        items={items}
+        income={c.income}
+        deficit={c.deficit}
+        onSelect={(name) => setExpanded(expanded === name ? null : name)}
+      />
+      <div className="ring-reconciliation">
+        <p>
+          其他每月儲蓄目標 NT${" "}
+          {money(entries.find((e) => e.id === "saving")?.value ?? 0)}
+        </p>
+        <p>
+          該金額已從可支配餘額扣除，但未包含於七類切片，也不混入
+          ETF、購物或旅遊。長期儲蓄／財務安全用途可歸 CFPB 儲蓄類別。
+        </p>
+        <p>
+          對帳：七類合計 NT$ {money(items.reduce((s, x) => s + x.value, 0))} ＋
+          其他每月儲蓄 NT${" "}
+          {money(entries.find((e) => e.id === "saving")?.value ?? 0)} ＝ 月收入
+          NT$ {money(c.income)}
+          {c.deficit > 0 ? ` ＋ 赤字 NT$ ${money(c.deficit)}` : ""}。
+        </p>
+      </div>
+      {expanded && (
+        <div className="living-breakdown">
+          <h3>{expanded}細項</h3>
+          <Breakdown
+            decimals={2}
+            items={entries
+              .filter(
+                (e) =>
+                  e.flow === "living" &&
+                  entryGroup(e, categories) ===
+                    (expanded === "必要生活支出" ? "needs" : "wants"),
+              )
+              .map((e) => [
+                `${e.name}（占收入 ${percent(c.income > 0 ? (e.value / c.income) * 100 : null)}）`,
+                e.value,
+              ])}
+          />
+          <p className="hint">
+            快速模式只列該類總額；明細模式才有19項資料，不由總額虛構明細。
+          </p>
+        </div>
+      )}
       <div className={c.remaining < 0 ? "note caution" : "note"}>
         <strong>剩餘金錢：NT$ {money(c.remaining)}</strong>
         {c.remaining < 0 && (
@@ -133,21 +180,27 @@ export function HouseholdHealth({
               預設按常見用途分類，伙食、育兒、交通、保險、貸款與大型購買等可能有不同性質，請依自己家庭用途調整。分類只改變健檢歸屬，不改變預算扣款。
             </p>
             <div className="classification-grid">
-              {entries.map((e) => (
-                <Select
-                  key={e.id}
-                  form={{
-                    ...f,
-                    values: {
-                      ...f.values,
-                      [`group_${e.id}`]: f.values[`group_${e.id}`] ?? e.group,
-                    },
-                  }}
-                  name={`group_${e.id}`}
-                  label={`${e.name}的健檢分類`}
-                  options={Object.entries(groupNames) as [string, string][]}
-                />
-              ))}
+              {entries
+                .filter((e) => !e.id.startsWith("quick"))
+                .map((e) => (
+                  <Select
+                    key={e.id}
+                    form={{
+                      ...f,
+                      values: {
+                        ...f.values,
+                        [`group_${e.id}`]: entryGroup(e, categories),
+                      },
+                    }}
+                    name={`group_${e.id}`}
+                    label={`${e.name}的健檢分類`}
+                    options={
+                      Object.entries(groupNames).filter(
+                        ([key]) => e.flow !== "living" || key !== "savings",
+                      ) as [string, string][]
+                    }
+                  />
+                ))}
             </div>
             <h3>調整參考上限</h3>
             <p className="reference-disclaimer">

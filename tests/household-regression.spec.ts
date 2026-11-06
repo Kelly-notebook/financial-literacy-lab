@@ -1,8 +1,18 @@
 import { test, expect } from "@playwright/test";
-async function enter(page: import("@playwright/test").Page) {
+async function enter(page: import("@playwright/test").Page, detail = true) {
   await page.goto("/");
   await page.getByRole("button", { name: /家庭預算/ }).click();
-  return page.locator(".workspace:visible");
+  const ui = page.locator(".workspace:visible");
+  if (
+    detail &&
+    (await ui
+      .getByRole("button", { name: "展開生活費明細", exact: true })
+      .isVisible())
+  )
+    await ui
+      .getByRole("button", { name: "展開生活費明細", exact: true })
+      .click();
+  return ui;
 }
 test("ETF 0 → 刪空 → 5000 → 完成，保留欄位、圖表與其他資料，重整可恢復", async ({
   page,
@@ -45,14 +55,17 @@ test("ETF 超界完成編輯只在欄位旁提示，修正與清除本機資料�
   await expect(ui.getByRole("alert")).toHaveCount(0);
   await etf.press("Enter");
   await expect(etf).toBeVisible();
-  await expect(ui.getByRole("alert")).toContainText("最近一次有效金額");
+  await expect(ui.getByRole("alert")).toContainText("保留有效結果");
   await expect(
     ui.getByRole("img", { name: /家庭每月分配環圈圖/ }),
   ).toBeVisible();
   await etf.fill("");
   await expect(etf).toHaveValue("");
   await etf.press("Tab");
-  await expect(etf).toHaveValue("0");
+  await expect(etf).toHaveValue("");
+  await expect(ui.getByRole("alert")).toBeVisible();
+  await etf.fill("0");
+  await etf.press("Tab");
   await expect(ui.getByRole("alert")).toHaveCount(0);
   await ui.getByRole("button", { name: "清除已儲存資料", exact: true }).click();
   await expect(ui.getByLabel("每月固定實領薪資")).toHaveValue("");
@@ -89,7 +102,7 @@ test("雙向購買模式、目的分類與購物／旅行切片分開", async ({
     ui.locator(".allocation-legend li").filter({ hasText: "大型購物儲蓄" }),
   ).toContainText("8,000");
   await expect(
-    ui.locator(".allocation-legend li").filter({ hasText: "旅遊基金儲蓄" }),
+    ui.locator(".allocation-legend li").filter({ hasText: "旅遊基金" }),
   ).toContainText("5,000");
   const before = await ui
     .getByText("每月剩餘可支配金額", { exact: true })
@@ -109,9 +122,9 @@ test("雙向購買模式、目的分類與購物／旅行切片分開", async ({
 test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByLabel("每月固定實領薪資").fill("100000");
-  await ui.getByLabel("必要生活費輸入方式").selectOption("detail");
+
   const necessary = ui.getByRole("group", {
-    name: "必要生活費與其他生活支出",
+    name: "必要生活支出",
     exact: true,
   });
   expect(
@@ -127,7 +140,8 @@ test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", a
     "data-tone",
     "yellow",
   );
-  await expect(ui.locator(".allocation-legend")).toContainText("醫藥費");
+  await ui.getByRole("button", { name: "必要生活支出 ▾", exact: true }).click();
+  await expect(ui.locator(".living-breakdown")).toContainText("醫藥費");
   await ui.getByLabel("每月預計投入 ETF 金額").fill("10000");
   await expect(ui.locator('[data-group="savings"]')).toHaveAttribute(
     "data-tone",
@@ -210,7 +224,7 @@ test("暫存損毀或瀏覽器拒絕寫入時，仍可輸入並試算", async ({
   await page.addInitScript(() =>
     localStorage.setItem("financial-literacy-lab:household:v1", "broken JSON"),
   );
-  const ui = await enter(page);
+  const ui = await enter(page, false);
   await expect(
     ui.getByText("無法讀取本機暫存，仍可繼續試算。", { exact: true }),
   ).toBeVisible();
