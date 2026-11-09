@@ -377,22 +377,23 @@ export default function Retirement() {
                 {r.reverse.find((x) => x.unmet)?.year ?? "未發生"}。
               </p>
               <h3>逐年提領明細</h3>
+              <p className="hint">
+                年度提領為該年實際可提領金額；資產不足時不會把未領到的金額計入累積提領。
+              </p>
+              {r.failure && (
+                <p className="note caution retirement-shortfall" role="status">
+                  第 {r.failure.year} 年（{r.failure.age} 歲）
+                  {r.failure.unmet ? "資產不足，無法滿足預定提領" : "資產耗盡"}
+                  。請留意後續可提領金額及剩餘資產。
+                </p>
+              )}
               <Rows
-                headers={[
-                  "年度／年齡",
-                  "預定提領",
-                  "實際提領",
-                  "累積提領",
-                  "剩餘資產",
-                  "狀態",
-                ]}
+                headers={["年度／年齡", "年度提領", "累積提領", "剩餘資產"]}
                 rows={r.rows.map((x) => [
                   `${x.year}年／${x.age}歲`,
-                  money(x.demand),
                   money(x.withdrawal),
                   money(x.cumulative),
                   money(x.balance),
-                  x.unmet ? "需求不足" : x.exhausted ? "資產耗盡" : "—",
                 ])}
               />
               {f.values.mode === "need" && (

@@ -70,9 +70,9 @@ test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正�
   expect(pos!.y).toBeGreaterThan(safety!.y + safety!.height);
   for (const [title, phrase] of [
     ["財務健康檢查", "三項財務風險"],
-    ["消費與預算調整", "保守調整"],
-    ["ETF 投資規劃", "年化報酬率 4%、6%、8%"],
-    ["退休準備分析", "延後五年、十年"],
+    ["消費與預算調整", "調整前後每月金額"],
+    ["ETF 投資規劃", "一個簡短長期例子"],
+    ["退休準備分析", "提早準備"],
   ]) {
     await coach
       .getByRole("button", { name: `複製 Prompt｜${title}`, exact: true })
@@ -134,7 +134,7 @@ test("剪貼簿失敗時保留表單與圖表，提供完整Prompt手動複製",
   await expect(coach.getByRole("status")).toContainText("無法複製");
   await coach.getByText("展開待複製文字", { exact: true }).click();
   await expect(coach.getByLabel("待複製文字")).toContainText(
-    "以年化報酬率 4%、6%、8%",
+    "一個簡短長期例子",
   );
   await expect(ui.getByLabel("每月固定實領薪資")).toHaveValue("100,000");
   await expect(ui.locator(".hero-result")).toBeVisible();
@@ -145,6 +145,106 @@ test("剪貼簿失敗時保留表單與圖表，提供完整Prompt手動複製",
   await expect(coach.getByLabel("待複製文字")).toContainText(
     "每月家庭稅後可支配收入（規劃用月平均）：NT$ 102,000",
   );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("四種Prompt及完整摘要隨兩個安全勾選即時更新", async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { copied: string }).copied = text;
+        },
+      },
+    }),
+  );
+  const ui = await enter(page),
+    coach = ui.getByRole("region", { name: "AI 個人化理財教練" });
+  const emergency = ui.getByLabel(
+      "我已準備 3～6 個月必要生活支出的緊急預備金。",
+    ),
+    retire = ui.getByLabel("我已有退休理財規劃，並定期檢視。");
+  for (const [emergencyChecked, retirementChecked] of [
+    [false, false],
+    [true, false],
+    [true, true],
+    [false, true],
+    [false, false],
+  ]) {
+    await emergency.setChecked(emergencyChecked);
+    await retire.setChecked(retirementChecked);
+    for (const button of await coach.getByRole("button").all()) {
+      await button.click();
+      const text = await page.evaluate(
+        () => (window as unknown as { copied: string }).copied,
+      );
+      expect(text).toContain(
+        emergencyChecked
+          ? "使用者自我確認已準備緊急預備金"
+          : "尚未確認已準備緊急預備金",
+      );
+      expect(text).toContain(
+        retirementChecked
+          ? "使用者自我確認已有退休理財規劃"
+          : "尚未確認已有退休理財規劃",
+      );
+    }
+  }
+});
+
+test("退休明細僅四欄、耗盡警示與實際提領對帳", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /退休提領/ }).click();
+  const ui = page.locator(".workspace:visible");
+  await ui.getByLabel("現有資產起始市值", { exact: true }).fill("1000");
+  await ui.getByLabel("首年／當期資產提領率", { exact: true }).fill("4");
+  await ui.getByLabel("假設年化名目總報酬", { exact: true }).fill("0");
+  await ui.getByLabel("年通膨率", { exact: true }).fill("0");
+  await ui.getByText("展開詳細分析", { exact: true }).click();
+  const table = ui.locator("table").filter({
+    has: page.getByRole("columnheader", { name: "年度／年齡", exact: true }),
+  });
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "年度／年齡",
+    "年度提領",
+    "累積提領",
+    "剩餘資產",
+  ]);
+  await expect(table.locator("tbody tr").first().locator("td")).toHaveText([
+    "1年／60歲",
+    "40",
+    "40",
+    "960",
+  ]);
+  await expect(table.locator("tbody tr").nth(24).locator("td")).toHaveText([
+    "25年／84歲",
+    "40",
+    "1,000",
+    "0",
+  ]);
+  await expect(table.locator("tbody tr").nth(25).locator("td")).toHaveText([
+    "26年／85歲",
+    "0",
+    "1,000",
+    "0",
+  ]);
+  await expect(ui.locator(".retirement-shortfall")).toContainText("資產耗盡");
+  // Inflation makes the first shortfall a partial actual payment, not the planned amount.
+  await ui.getByLabel("年通膨率", { exact: true }).fill("2");
+  await expect(ui.locator(".retirement-shortfall")).toContainText("資產不足");
+  await expect(table.locator("tbody tr").nth(20).locator("td")).toHaveText([
+    "21年／80歲",
+    "28",
+    "1,000",
+    "0",
+  ]);
+  const rows = await table.locator("tbody tr").allTextContents();
+  expect(rows.join("")).not.toMatch(/NaN|Infinity/);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

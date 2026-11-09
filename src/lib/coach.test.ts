@@ -151,8 +151,8 @@ describe("家庭資料摘要與AI主題", () => {
     expect(s).toContain(
       "ETF 投資：未提供或待修正（畫面暫用最近有效值 NT$ 5,000）",
     );
-    expect(s).toContain("未勾選（未知是否實際完成）");
-    expect(s).toContain("使用者已自行勾選（未經驗證）");
+    expect(s).toContain("尚未確認已準備緊急預備金");
+    expect(s).toContain("使用者自我確認已有退休理財規劃");
     expect(s).toContain("利率、餘額、用途與本金／利息拆分：未提供");
   });
   it.each(coachTopics)("$title包含最新資料、對應任務及共同限制", (topic) => {
@@ -160,8 +160,46 @@ describe("家庭資料摘要與AI主題", () => {
       prompt = coachPrompt(s, topic.id);
     expect(prompt.startsWith(s)).toBe(true);
     expect(prompt).toContain(topic.prompt);
-    expect(prompt).toContain("接下來 30 天的三項行動");
-    expect(prompt).toContain("不得羞辱使用者或批評家庭成員");
+    expect(prompt).toContain("250～400");
+    expect(prompt).toContain("避免羞辱、責備或道德批判");
     expect(prompt).toContain("不是保證收益或個人化證券投資指示");
+  });
+  it.each(coachTopics)("$title勾選與取消即時反映兩項安全資訊", (topic) => {
+    for (const checked of ["yes", "no"]) {
+      const text = coachPrompt(
+        householdSummary(
+          {
+            ...values,
+            emergencyConfirmed: checked,
+            retirementConfirmed: checked,
+          },
+          snapshot(),
+        ),
+        topic.id,
+      );
+      expect(text).toContain(
+        checked === "yes"
+          ? "使用者自我確認已準備緊急預備金"
+          : "尚未確認已準備緊急預備金",
+      );
+      expect(text).toContain(
+        checked === "yes"
+          ? "使用者自我確認已有退休理財規劃"
+          : "尚未確認已有退休理財規劃",
+      );
+      expect(text).toContain("未勾選不代表");
+    }
+    expect(topic.prompt.length).toBeLessThan(650);
+    expect(coachPrompt("資料", topic.id)).not.toMatch(
+      /三種方案|三種投資情境|5、10、20 年/,
+    );
+  });
+  it("健檢及預算主動檢視孝親負擔且不預設取消", () => {
+    for (const topic of coachTopics.slice(0, 2)) {
+      expect(topic.prompt).toContain("而非不可調整的固定義務");
+      expect(topic.prompt).toContain("調整後的支援上限");
+      expect(topic.prompt).toContain("不要預設必須完全取消");
+      expect(topic.prompt).toContain("法定扶養義務");
+    }
   });
 });
