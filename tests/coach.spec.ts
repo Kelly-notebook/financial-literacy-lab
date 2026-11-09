@@ -69,9 +69,9 @@ test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正�
     pos = await coach.boundingBox();
   expect(pos!.y).toBeGreaterThan(safety!.y + safety!.height);
   for (const [title, phrase] of [
-    ["財務健康檢查", "三項財務風險"],
-    ["消費與預算調整", "調整前後每月金額"],
-    ["ETF 投資規劃", "一個簡短長期例子"],
+    ["財務健康檢查", "兩至三項財務風險"],
+    ["消費與預算調整", "建議調整後金額"],
+    ["ETF 投資規劃", "一個簡短長期複利例子"],
     ["退休準備分析", "提早準備"],
   ]) {
     await coach
@@ -83,10 +83,8 @@ test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正�
       "每月家庭稅後可支配收入（規劃用月平均）：NT$ 100,000",
     );
     expect(text).toContain("生活費細項：未提供");
-    expect(text).toContain("不是保證收益或個人化證券投資指示");
-    await expect(coach.getByRole("status")).toHaveText(
-      "已複製，請貼到 ChatGPT 或其他 AI 工具進行分析。",
-    );
+    expect(text).toContain("不是個人化證券投資指示");
+    await expect(coach.getByRole("status")).toHaveText(`已複製：${title}`);
   }
   await ui.getByRole("button", { name: "展開生活費明細", exact: true }).click();
   await ui.getByLabel("伙食", { exact: true }).fill("18000");
@@ -134,7 +132,7 @@ test("剪貼簿失敗時保留表單與圖表，提供完整Prompt手動複製",
   await expect(coach.getByRole("status")).toContainText("無法複製");
   await coach.getByText("展開待複製文字", { exact: true }).click();
   await expect(coach.getByLabel("待複製文字")).toContainText(
-    "一個簡短長期例子",
+    "一個簡短長期複利例子",
   );
   await expect(ui.getByLabel("每月固定實領薪資")).toHaveValue("100,000");
   await expect(ui.locator(".hero-result")).toBeVisible();
@@ -250,4 +248,91 @@ test("退休明細僅四欄、耗盡警示與實際提領對帳", async ({ page 
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("複製中立即標示主題並鎖定全部按鈕，成功與失敗後可繼續", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const requests: Array<{
+      text: string;
+      resolve: () => void;
+      reject: () => void;
+    }> = [];
+    (window as unknown as { copyRequests: typeof requests }).copyRequests =
+      requests;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (text: string) =>
+          new Promise<void>((resolve, reject) =>
+            requests.push({
+              text,
+              resolve,
+              reject: () => reject(new Error("denied")),
+            }),
+          ),
+      },
+    });
+  });
+  const ui = await enter(page),
+    coach = ui.getByRole("region", { name: "AI 個人化理財教練" });
+  const health = coach.getByRole("button", {
+      name: "複製 Prompt｜財務健康檢查",
+      exact: true,
+    }),
+    etf = coach.getByRole("button", {
+      name: "複製 Prompt｜ETF 投資規劃",
+      exact: true,
+    });
+  await health.click();
+  await expect(coach.getByRole("status")).toHaveText("正在複製：財務健康檢查");
+  for (const button of await coach.getByRole("button").all())
+    await expect(button).toBeDisabled();
+  // Even a programmatically dispatched second event cannot enqueue another write.
+  await etf.dispatchEvent("click");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { copyRequests: unknown[] }).copyRequests.length,
+    ),
+  ).toBe(1);
+  await page.evaluate(() =>
+    (
+      window as unknown as { copyRequests: Array<{ resolve: () => void }> }
+    ).copyRequests[0].resolve(),
+  );
+  await expect(coach.getByRole("status")).toHaveText("已複製：財務健康檢查");
+  await etf.click();
+  await expect(coach.getByRole("status")).toHaveText("正在複製：ETF 投資規劃");
+  await expect(coach.getByRole("status")).not.toContainText("已複製");
+  await page.evaluate(() =>
+    (
+      window as unknown as { copyRequests: Array<{ reject: () => void }> }
+    ).copyRequests[1].reject(),
+  );
+  await expect(coach.getByRole("status")).toContainText(
+    "無法複製：ETF 投資規劃",
+  );
+  await coach.getByText("展開待複製文字", { exact: true }).click();
+  await expect(coach.getByLabel("待複製文字")).toHaveValue(
+    /^【本次分析任務：ETF 投資規劃】/,
+  );
+  for (const button of await coach.getByRole("button").all())
+    await expect(button).toBeEnabled();
+  await coach
+    .getByRole("button", { name: "複製完整家庭收支摘要", exact: true })
+    .click();
+  await expect(coach.getByRole("status")).toHaveText(
+    "正在複製：完整家庭收支摘要",
+  );
+  await expect(coach.getByLabel("待複製文字")).toHaveCount(0);
+  await page.evaluate(() =>
+    (
+      window as unknown as { copyRequests: Array<{ resolve: () => void }> }
+    ).copyRequests[2].resolve(),
+  );
+  await expect(coach.getByRole("status")).toHaveText(
+    "已複製：完整家庭收支摘要",
+  );
 });

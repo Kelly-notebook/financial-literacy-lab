@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { householdSummary } from "./householdSummary";
-import { coachTopics, coachPrompt } from "./coachPrompts";
+import {
+  coachTopics,
+  coachPrompt,
+  commonCoachRequirements,
+} from "./coachPrompts";
 import { budget, type BudgetInput } from "./budget";
 import { allocations, budgetEntries } from "./health";
 const input: BudgetInput = {
@@ -158,11 +162,14 @@ describe("家庭資料摘要與AI主題", () => {
   it.each(coachTopics)("$title包含最新資料、對應任務及共同限制", (topic) => {
     const s = householdSummary(values, snapshot()),
       prompt = coachPrompt(s, topic.id);
-    expect(prompt.startsWith(s)).toBe(true);
+    expect(prompt.startsWith(`【本次分析任務：${topic.title}】`)).toBe(true);
+    expect(prompt.split(s)).toHaveLength(2);
+    expect(prompt.indexOf(topic.prompt)).toBeLessThan(prompt.indexOf(s));
+    expect(prompt.indexOf(s)).toBeLessThan(prompt.indexOf("【共同輸出要求】"));
     expect(prompt).toContain(topic.prompt);
-    expect(prompt).toContain("250～400");
-    expect(prompt).toContain("避免羞辱、責備或道德批判");
-    expect(prompt).toContain("不是保證收益或個人化證券投資指示");
+    expect(prompt).toContain("150～250");
+    expect(prompt).toContain("嚴格、務實但尊重使用者");
+    expect(prompt).toContain("不是個人化證券投資指示");
   });
   it.each(coachTopics)("$title勾選與取消即時反映兩項安全資訊", (topic) => {
     for (const checked of ["yes", "no"]) {
@@ -187,19 +194,36 @@ describe("家庭資料摘要與AI主題", () => {
           ? "使用者自我確認已有退休理財規劃"
           : "尚未確認已有退休理財規劃",
       );
-      expect(text).toContain("未勾選不代表");
+      expect(text).toContain(
+        checked === "yes" ? "僅自我確認，未經驗證" : "未勾選不代表",
+      );
     }
     expect(topic.prompt.length).toBeLessThan(650);
     expect(coachPrompt("資料", topic.id)).not.toMatch(
       /三種方案|三種投資情境|5、10、20 年/,
     );
   });
-  it("健檢及預算主動檢視孝親負擔且不預設取消", () => {
-    for (const topic of coachTopics.slice(0, 2)) {
+  it("預算主動檢視孝親負擔且不預設取消", () => {
+    for (const topic of coachTopics.filter((x) => x.id === "spending")) {
       expect(topic.prompt).toContain("而非不可調整的固定義務");
       expect(topic.prompt).toContain("調整後的支援上限");
       expect(topic.prompt).toContain("不要預設必須完全取消");
       expect(topic.prompt).toContain("法定扶養義務");
     }
+  });
+  it("共同規則不再強制所有主題減支，四主題結構明確不同", () => {
+    expect(commonCoachRequirements).not.toMatch(
+      /請優先回答|每月具體建議調整|本月.*兩項行動|哪些支出/,
+    );
+    expect(
+      new Set(coachTopics.map((t) => coachPrompt("完整原始資料", t.id))).size,
+    ).toBe(4);
+    const [health, spending, etf, retirement] = coachTopics;
+    expect(health.prompt).toContain("不要硬找問題");
+    expect(spending.prompt).toContain("不必強迫削減支出");
+    expect(etf.prompt).toContain("目前每月 ETF 投入金額及占收入比例");
+    expect(etf.prompt).toContain("不需要強制提出消費減支建議");
+    expect(retirement.prompt).toContain("退休準備的優勢或主要不足");
+    expect(retirement.prompt).toContain("期間、報酬率及通膨假設");
   });
 });

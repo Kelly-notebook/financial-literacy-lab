@@ -1,21 +1,30 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { coachTopics, coachPrompt } from "../lib/coachPrompts";
 export function AICoach({ summary }: { summary: string }) {
   const [status, setStatus] = useState(""),
     [failed, setFailed] = useState(false),
     [fallbackText, setFallbackText] = useState("");
-  async function copy(text: string) {
+  const copying = useRef(false);
+  const [busy, setBusy] = useState(false);
+  async function copy(text: string, title: string) {
+    if (copying.current) return;
+    copying.current = true;
+    setBusy(true);
+    setFailed(false);
+    setStatus(`正在複製：${title}`);
     setFallbackText(text);
     try {
       await navigator.clipboard.writeText(text);
-      setFailed(false);
-      setStatus("已複製，請貼到 ChatGPT 或其他 AI 工具進行分析。");
+      setStatus(`已複製：${title}`);
     } catch {
       setFailed(true);
       setStatus(
-        "無法複製，請允許瀏覽器剪貼簿權限，或展開下方文字手動選取複製。",
+        `無法複製：${title}。請允許瀏覽器剪貼簿權限，或展開下方文字手動選取複製。`,
       );
+    } finally {
+      copying.current = false;
+      setBusy(false);
     }
   }
   return (
@@ -36,14 +45,19 @@ export function AICoach({ summary }: { summary: string }) {
           <button
             className="coach-card"
             key={topic.id}
-            onClick={() => copy(coachPrompt(summary, topic.id))}
+            disabled={busy}
+            onClick={() => copy(coachPrompt(summary, topic.id), topic.title)}
           >
             <Copy size={17} aria-hidden="true" />
             <span>複製 Prompt｜{topic.title}</span>
           </button>
         ))}
       </div>
-      <button className="scenario-button" onClick={() => copy(summary)}>
+      <button
+        className="scenario-button"
+        disabled={busy}
+        onClick={() => copy(summary, "完整家庭收支摘要")}
+      >
         複製完整家庭收支摘要
       </button>
       <p role="status" aria-live="polite">
