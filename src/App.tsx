@@ -1,3 +1,7 @@
+import type {
+  MonthlyTransfer,
+  RetirementTransfer,
+} from "./lib/savingsComparison";
 import { useState } from "react";
 import {
   ArrowUpRight,
@@ -50,6 +54,9 @@ const modules = [
 ];
 export default function App() {
   const [page, setPage] = useState<number | null>(null);
+  const [compoundTransfer, setCompoundTransfer] = useState<MonthlyTransfer>();
+  const [retirementTransfer, setRetirementTransfer] =
+    useState<RetirementTransfer>();
   return (
     <>
       <header className="site-header">
@@ -211,8 +218,28 @@ export default function App() {
             </nav>
             {modules.map((m, i) => (
               <div key={m.title} hidden={page !== i}>
-                {i === 2 ? (
-                  <Budget onOpenRetirement={() => setPage(3)} />
+                {i === 1 ? (
+                  <Compound
+                    incoming={compoundTransfer}
+                    onConsumed={() => setCompoundTransfer(undefined)}
+                    onRetirement={(data) => {
+                      setRetirementTransfer(data);
+                      setPage(3);
+                    }}
+                  />
+                ) : i === 2 ? (
+                  <Budget
+                    onOpenRetirement={() => setPage(3)}
+                    onCompound={(monthly) => {
+                      setCompoundTransfer({ monthly });
+                      setPage(1);
+                    }}
+                  />
+                ) : i === 3 ? (
+                  <Retirement
+                    incoming={retirementTransfer}
+                    onConsumed={() => setRetirementTransfer(undefined)}
+                  />
                 ) : (
                   <m.component />
                 )}

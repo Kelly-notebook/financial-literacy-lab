@@ -46,7 +46,11 @@ const loanFields = [
 ];
 export default function Budget({
   onOpenRetirement,
-}: { onOpenRetirement?: () => void } = {}) {
+  onCompound,
+}: {
+  onOpenRetirement?: () => void;
+  onCompound?: (monthly: number) => void;
+} = {}) {
   const f = useBudgetForm({
     mode: "monthly",
     salary: "",
@@ -650,6 +654,7 @@ export default function Budget({
               current={c}
               entries={r.entries}
               items={r.items}
+              onCompound={onCompound}
             />
             <div className="panel">
               <span className="eyebrow">04 / A GOAL WORTH PLANNING</span>

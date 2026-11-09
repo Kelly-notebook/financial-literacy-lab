@@ -1,3 +1,4 @@
+import { draftIssue } from "../lib/savingsComparison";
 import { useState } from "react";
 import { money as formatMoney } from "../lib/finance";
 import type { BudgetRow } from "../lib/budget";
@@ -34,11 +35,13 @@ export function HouseholdHealth({
   current: c,
   entries,
   items,
+  onCompound,
 }: {
   form: Form;
   current: BudgetRow;
   entries: BudgetEntry[];
   items: Allocation[];
+  onCompound?: (monthly: number) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const categories = Object.fromEntries(
@@ -51,6 +54,9 @@ export function HouseholdHealth({
     healthCheck(entries, c.income, categories, limits),
   );
   const h = result.data ?? healthCheck(entries, c.income, categories);
+  const transferIssue = draftIssue(f.values, [
+    ["etfMonthly", "每月預計投入 ETF 金額"],
+  ]);
   const notices = investmentCheck(c, f.values.emergencyConfirmed === "yes");
   return (
     <Details title="家庭收支健檢與投資規劃">
@@ -117,6 +123,22 @@ export function HouseholdHealth({
         name="etfMonthly"
         label="每月預計投入 ETF 金額"
       />
+      {onCompound && (
+        <>
+          <button
+            className="scenario-button"
+            disabled={!!transferIssue}
+            onClick={() => onCompound(f.n("etfMonthly"))}
+          >
+            帶入長期複利試算
+          </button>
+          {transferIssue && <p className="hint">{transferIssue}</p>}
+          <p className="hint">
+            只帶入目前有效 ETF 月投入，取代原月投入並設為 30
+            年；停用既有中途投入設定，不把全部結餘視為投資。起始資產與報酬率保留。
+          </p>
+        </>
+      )}
       <button
         className="scenario-button"
         disabled={c.income <= 0}

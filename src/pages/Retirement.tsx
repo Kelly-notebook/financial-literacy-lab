@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import type { RetirementTransfer } from "../lib/savingsComparison";
 import { useLastValidResult } from "../hooks/useNumericDrafts";
 import {
   retirement,
@@ -23,7 +25,10 @@ import {
   Chart,
   Rows,
 } from "../components/ui";
-export default function Retirement() {
+export default function Retirement({
+  incoming,
+  onConsumed,
+}: { incoming?: RetirementTransfer; onConsumed?: () => void } = {}) {
   const f = useForm({
     ...assetDefaults,
     initial: "10000000",
@@ -40,6 +45,18 @@ export default function Retirement() {
     strategy: "real",
     label: "taiwan",
   });
+  const [source, setSource] = useState<RetirementTransfer>();
+  useEffect(() => {
+    if (!incoming) return;
+    f.patch({
+      initial: String(incoming.assets),
+      assetMode: "value",
+      mode: "assets",
+    });
+    setSource(incoming);
+    onConsumed?.();
+    // Only a new explicit transfer changes the form; other retirement assumptions stay intact.
+  }, [incoming]);
   const [result] = [
     safely(() => {
       const rate = f.n("rate") / 100;
@@ -106,6 +123,17 @@ export default function Retirement() {
           <h2>為下一段人生，留好選擇</h2>
           <p>看懂提領策略，也理解模擬的限制。</p>
         </div>
+        {source && (
+          <div className="note retirement-source" role="status">
+            <p>已帶入長期複利的期末資產，作為退休起始市值。</p>
+            <p className="hint">
+              來源：{source.years} 年累積・{source.scenario}・NT${" "}
+              {money(source.assets, 2)}
+              。這是未來退休時的名目資產，不是今天的持有資產；可自行修改，不自動同步。未來月提領不等於今天生活費的購買力。通膨與實質金額以退休起始年為基準，未再折算累積期間；4%
+              僅為教育情境，不保證資產持續支應退休生活。
+            </p>
+          </div>
+        )}
         <Select
           form={f}
           name="mode"
@@ -217,7 +245,10 @@ export default function Retirement() {
           可先清空再輸入；暫時無效時保留有效試算，完成後在欄位旁提示。
         </p>
         <Actions
-          reset={f.reset}
+          reset={() => {
+            f.reset();
+            setSource(undefined);
+          }}
           summary={
             r
               ? `退休模擬：起始資產 ${money(r.initial)} 元，首年提領 ${money(r.first.withdrawal)} 元，平均每月 ${money(r.first.withdrawal / 12)} 元。策略 ${f.values.strategy}；${f.values.years}年末資產 ${money(r.end.balance)} 元。非安全退休保證。`

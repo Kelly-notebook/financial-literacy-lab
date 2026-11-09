@@ -1,3 +1,12 @@
+import { useEffect, useState } from "react";
+import {
+  compoundDraftIssue,
+  draftIssue,
+  retirementTransferIssue,
+  savingsComparison,
+  type MonthlyTransfer,
+  type RetirementTransfer,
+} from "../lib/savingsComparison";
 import {
   PortfolioAsset,
   portfolioInitial,
@@ -21,7 +30,15 @@ import {
   Rows,
   PrincipalBar,
 } from "../components/ui";
-export default function Compound() {
+export default function Compound({
+  incoming,
+  onConsumed,
+  onRetirement,
+}: {
+  incoming?: MonthlyTransfer;
+  onConsumed?: () => void;
+  onRetirement?: (data: RetirementTransfer) => void;
+} = {}) {
   const f = useForm({
     ...portfolioDefaults,
     years: "30",
@@ -32,7 +49,16 @@ export default function Compound() {
     change: "no",
     changeYear: "11",
     nextMonthly: "8000",
+    extra: "2000",
   });
+  const [source, setSource] = useState<MonthlyTransfer>();
+  useEffect(() => {
+    if (!incoming) return;
+    f.patch({ monthly: String(incoming.monthly), years: "30", change: "no" });
+    setSource(incoming);
+    onConsumed?.();
+    // The incoming object is a one-shot user action; later form edits do not replay it.
+  }, [incoming]);
   const result = safely(() => {
     const initial = portfolioInitial(f),
       change = f.values.change === "yes";
@@ -62,6 +88,7 @@ export default function Compound() {
         }));
     return {
       initial,
+      input,
       years,
       etf,
       bank,
@@ -71,6 +98,22 @@ export default function Compound() {
     };
   });
   const r = useLastValidResult(result, f.revision);
+  const mainIssue = compoundDraftIssue(f.values) ?? result.error;
+  const comparison = safely(() =>
+    r ? savingsComparison(r.input, f.n("extra")) : undefined,
+  );
+  const extraIssue =
+    draftIssue(f.values, [["extra", "每月額外增加投入金額"]]) ??
+    comparison.error;
+  const transferIssue = mainIssue ?? retirementTransferIssue(r?.end.value);
+  const enhancedIssue =
+    mainIssue ??
+    extraIssue ??
+    retirementTransferIssue(comparison.data?.enhanced.value);
+  const sendRetirement = (assets: number, scenario: string) => {
+    if (!onRetirement || mainIssue || retirementTransferIssue(assets)) return;
+    onRetirement({ assets, years: r!.years, scenario });
+  };
   return (
     <div className="workspace">
       <section className="panel inputs">
@@ -79,6 +122,13 @@ export default function Compound() {
           <h2>讓時間，參與你的計畫</h2>
           <p>每個月一點累積，看看未來的可能。</p>
         </div>
+        {source && (
+          <p className="note" role="status">
+            已帶入家庭預算 ETF 月投入 NT$ {money(source.monthly, 2)}，帶入時設為
+            30
+            年，取代原月投入並停用中途調整。起始資產與報酬率沿用；後續可自行修改，不自動同步。
+          </p>
+        )}
         <Field form={f} name="monthly" label="每月投入金額" />
         <div className="field-grid">
           <Field
@@ -135,7 +185,10 @@ export default function Compound() {
           可先清空再輸入；暫時無效時保留有效試算，完成後在欄位旁提示。
         </p>
         <Actions
-          reset={f.reset}
+          reset={() => {
+            f.reset();
+            setSource(undefined);
+          }}
           summary={
             r
               ? `長期複利：${r.years}年預估市值 NT$ ${money(r.end.value)}，本金 ${money(r.end.principal)}，假設收益 ${money(r.end.gain)}；同額同時點銀行存款 ${money(r.bank.at(-1)!.value)}。非報酬保證。`
@@ -155,6 +208,118 @@ export default function Compound() {
                 <Stat small label="假設投資收益" value={r.end.gain} />
               </div>
             </div>
+            {onRetirement && (
+              <div className="panel">
+                <button
+                  className="scenario-button"
+                  disabled={!!transferIssue}
+                  onClick={() => sendRetirement(r.end.value, "原方案 A")}
+                >
+                  將期末資產帶入退休提領
+                </button>
+                {transferIssue && <p className="hint">{transferIssue}</p>}
+                <p className="hint">
+                  帶入完整期末資產（含起始市值與投入），作為 {r.years}{" "}
+                  年後退休當下的名目起始資產，不是今天的實際資產。未來購買力與今天不同。
+                </p>
+              </div>
+            )}
+            <Details title="多存一點，未來差多少？">
+              <Field form={f} name="extra" label="每月額外增加投入金額" />
+              {comparison.data && (
+                <div className="savings-comparison">
+                  <Rows
+                    headers={[
+                      "情境",
+                      "每月投入",
+                      "期末總資產",
+                      "累積投入本金",
+                      "假設投資收益",
+                    ]}
+                    rows={[
+                      [
+                        "原方案 A",
+                        money(comparison.data.baseMonthly, 2),
+                        money(comparison.data.base.value, 2),
+                        money(comparison.data.base.principal, 2),
+                        money(comparison.data.base.gain, 2),
+                      ],
+                      [
+                        "增加投入 B",
+                        money(comparison.data.enhancedMonthly, 2),
+                        money(comparison.data.enhanced.value, 2),
+                        money(comparison.data.enhanced.principal, 2),
+                        money(comparison.data.enhanced.gain, 2),
+                      ],
+                    ]}
+                  />
+                  <Breakdown
+                    decimals={2}
+                    items={[
+                      ["B 比 A 多累積資產", comparison.data.additionalAssets],
+                      [
+                        "額外資產首年 4% 提領的月平均",
+                        comparison.data.additionalMonthlyWithdrawal,
+                      ],
+                    ]}
+                  />
+                  {r.input.changeMonth !== undefined && (
+                    <p className="hint">
+                      原方案包含中途調整：自第 {f.n("changeYear")} 年起，A 每月
+                      NT$ {money(r.input.nextMonthly!, 2)}，B 每月 NT${" "}
+                      {money(r.input.nextMonthly! + f.n("extra"), 2)}
+                      ；額外投入每個月都加上，不只第一階段。
+                    </p>
+                  )}
+                  <p className="hint">
+                    兩方案使用相同期初本金、{r.years} 年期間與年化{" "}
+                    {r.input.annual * 100}%
+                    假設，同樣月底投入。只做比較，不修改原月投入或家庭預算。
+                  </p>
+                  {onRetirement && (
+                    <div className="actions">
+                      <button
+                        disabled={!!transferIssue}
+                        onClick={() =>
+                          sendRetirement(
+                            comparison.data!.base.value,
+                            "原方案 A",
+                          )
+                        }
+                      >
+                        以原方案試算退休
+                      </button>
+                      <button
+                        disabled={!!enhancedIssue}
+                        onClick={() => {
+                          if (!enhancedIssue)
+                            sendRetirement(
+                              comparison.data!.enhanced.value,
+                              "增加投入方案 B",
+                            );
+                        }}
+                      >
+                        以增加投入方案試算退休
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(mainIssue || extraIssue || comparison.error) && (
+                <p className="hint">
+                  {mainIssue || extraIssue || comparison.error}{" "}
+                  暫留有效結果供參考，修正後才能帶入對應方案。
+                </p>
+              )}
+              {!mainIssue && !extraIssue && enhancedIssue && (
+                <p className="hint">增加方案：{enhancedIssue}</p>
+              )}
+              <p className="reference-disclaimer">
+                以上均為未來名目金額；{r.years} 年後的購買力與今天不同。4%
+                是首年提領的教育情境（月額為年額除以
+                12），不保證退休安全，也不等於今天的生活費。退休通膨設定以退休起始年為基準，不重複折算累積期間。
+              </p>
+            </Details>
             <div className="milestones">
               {[...new Set([10, 20, 30, r.years])]
                 .filter((y) => y <= r.years)
