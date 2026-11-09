@@ -150,13 +150,15 @@ describe("家庭資料摘要與AI主題", () => {
     const empty = householdSummary({ mode: "monthly", salary: "" });
     expect(empty).toContain("固定月薪（使用者輸入的實際每月實領）：未提供");
     expect(empty).toContain("每月家庭稅後可支配收入（規劃用月平均）：未提供");
-    expect(empty).toContain("退休理財規劃並定期檢視：未提供");
+    expect(empty).toContain(
+      "已開始退休儲蓄或投資並定期檢視（不代表退休資金足夠）：未提供",
+    );
     const s = householdSummary({ ...values, etfMonthly: "" }, snapshot());
     expect(s).toContain(
       "ETF 投資：未提供或待修正（畫面暫用最近有效值 NT$ 5,000）",
     );
     expect(s).toContain("尚未確認已準備緊急預備金");
-    expect(s).toContain("使用者自我確認已有退休理財規劃");
+    expect(s).toContain("使用者自我確認已開始為退休儲蓄或投資並定期檢視規劃");
     expect(s).toContain("利率、餘額、用途與本金／利息拆分：未提供");
   });
   it.each(coachTopics)("$title包含最新資料、對應任務及共同限制", (topic) => {
@@ -191,8 +193,8 @@ describe("家庭資料摘要與AI主題", () => {
       );
       expect(text).toContain(
         checked === "yes"
-          ? "使用者自我確認已有退休理財規劃"
-          : "尚未確認已有退休理財規劃",
+          ? "使用者自我確認已開始為退休儲蓄或投資並定期檢視規劃"
+          : "尚未確認已開始為退休儲蓄或投資並定期檢視規劃",
       );
       expect(text).toContain(
         checked === "yes" ? "僅自我確認，未經驗證" : "未勾選不代表",
@@ -211,19 +213,17 @@ describe("家庭資料摘要與AI主題", () => {
       expect(topic.prompt).toContain("法定扶養義務");
     }
   });
-  it("共同規則不再強制所有主題減支，四主題結構明確不同", () => {
+  it("共同規則不再強制所有主題減支，三主題結構明確不同", () => {
     expect(commonCoachRequirements).not.toMatch(
       /請優先回答|每月具體建議調整|本月.*兩項行動|哪些支出/,
     );
     expect(
       new Set(coachTopics.map((t) => coachPrompt("完整原始資料", t.id))).size,
-    ).toBe(4);
-    const [health, spending, etf, retirement] = coachTopics;
+    ).toBe(3);
+    const [health, spending, etf] = coachTopics;
     expect(health.prompt).toContain("不要硬找問題");
     expect(spending.prompt).toContain("不必強迫削減支出");
     expect(etf.prompt).toContain("目前每月 ETF 投入金額及占收入比例");
     expect(etf.prompt).toContain("不需要強制提出消費減支建議");
-    expect(retirement.prompt).toContain("退休準備的優勢或主要不足");
-    expect(retirement.prompt).toContain("期間、報酬率及通膨假設");
   });
 });

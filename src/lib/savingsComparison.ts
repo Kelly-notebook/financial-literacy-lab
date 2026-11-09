@@ -13,6 +13,7 @@ export interface RetirementTransfer {
   assets: number;
   years: number;
   scenario: string;
+  baseYear?: number;
 }
 type DraftField = [key: string, label: string, rule?: NumericRule];
 export function draftIssue(

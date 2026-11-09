@@ -1,7 +1,13 @@
 import { useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { coachTopics, coachPrompt } from "../lib/coachPrompts";
-export function AICoach({ summary }: { summary: string }) {
+export function AICoach({
+  summary,
+  planningPrompt,
+}: {
+  summary: string;
+  planningPrompt?: string;
+}) {
   const [status, setStatus] = useState(""),
     [failed, setFailed] = useState(false),
     [fallbackText, setFallbackText] = useState("");
@@ -28,25 +34,34 @@ export function AICoach({ summary }: { summary: string }) {
     }
   }
   return (
-    <section className="panel ai-coach" aria-label="AI 個人化理財教練">
+    <section
+      className="panel ai-coach"
+      aria-label={planningPrompt ? "AI 退休與轉職規劃" : "AI 個人化理財教練"}
+    >
       <span className="eyebrow">LEARN & TAKE ACTION</span>
-      <h3>AI 個人化理財教練</h3>
+      <h3>{planningPrompt ? "AI 退休與轉職規劃" : "AI 個人化理財教練"}</h3>
       <p>
-        讓 AI
-        根據你的家庭收支資料，找出財務風險、分析消費習慣，並提出具體可執行的理財改善方案。
+        {planningPrompt
+          ? "整理退休提領、家庭責任與職涯資料，產生退休與轉職分析任務。"
+          : "讓 AI 根據完整家庭收支資料，評估風險、消費與投資能力。"}
       </p>
       <p className="hint">
-        先填寫家庭預算，再複製資料與分析任務，貼到你選擇的 AI
-        工具。教練以嚴格但尊重的方式分析；本網站不直接產生 AI 回答，AI
-        的計算與建議仍需核對。
+        複製完整資料與 Prompt，貼到 ChatGPT 或 Gemini。本站不直接產生 AI
+        回答，也不會自動傳送資料；請核對 AI 計算與建議。
       </p>
       <div className="coach-grid">
-        {coachTopics.map((topic) => (
+        {(planningPrompt
+          ? [{ title: "AI 退休與轉職規劃", text: planningPrompt }]
+          : coachTopics.map((topic) => ({
+              title: topic.title,
+              text: coachPrompt(summary, topic.id),
+            }))
+        ).map((topic) => (
           <button
             className="coach-card"
-            key={topic.id}
+            key={topic.title}
             disabled={busy}
-            onClick={() => copy(coachPrompt(summary, topic.id), topic.title)}
+            onClick={() => copy(topic.text, topic.title)}
           >
             <Copy size={17} aria-hidden="true" />
             <span>複製 Prompt｜{topic.title}</span>
@@ -56,9 +71,14 @@ export function AICoach({ summary }: { summary: string }) {
       <button
         className="scenario-button"
         disabled={busy}
-        onClick={() => copy(summary, "完整家庭收支摘要")}
+        onClick={() =>
+          copy(
+            summary,
+            planningPrompt ? "完整退休與轉職摘要" : "完整家庭收支摘要",
+          )
+        }
       >
-        複製完整家庭收支摘要
+        {planningPrompt ? "複製完整退休與轉職摘要" : "複製完整家庭收支摘要"}
       </button>
       <p role="status" aria-live="polite">
         {status}

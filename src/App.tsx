@@ -2,7 +2,8 @@ import type {
   MonthlyTransfer,
   RetirementTransfer,
 } from "./lib/savingsComparison";
-import { useState } from "react";
+import type { BudgetTransfer } from "./lib/retirementPlanning";
+import { useRef, useState } from "react";
 import {
   ArrowUpRight,
   ArrowLeft,
@@ -53,6 +54,7 @@ const modules = [
   },
 ];
 export default function App() {
+  const budgetSnapshot = useRef<BudgetTransfer | undefined>(undefined);
   const [page, setPage] = useState<number | null>(null);
   const [compoundTransfer, setCompoundTransfer] = useState<MonthlyTransfer>();
   const [retirementTransfer, setRetirementTransfer] =
@@ -229,6 +231,9 @@ export default function App() {
                   />
                 ) : i === 2 ? (
                   <Budget
+                    onSnapshot={(snapshot) => {
+                      budgetSnapshot.current = snapshot;
+                    }}
                     onOpenRetirement={() => setPage(3)}
                     onCompound={(monthly) => {
                       setCompoundTransfer({ monthly });
@@ -237,6 +242,7 @@ export default function App() {
                   />
                 ) : i === 3 ? (
                   <Retirement
+                    getBudget={() => budgetSnapshot.current}
                     incoming={retirementTransfer}
                     onConsumed={() => setRetirementTransfer(undefined)}
                   />

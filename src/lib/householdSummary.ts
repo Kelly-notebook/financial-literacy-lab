@@ -142,7 +142,7 @@ export function householdSummary(
     "50／30／20 是參考法則，不是硬性標準；儲蓄低於 10% 黃色提醒是本站門檻，非 CFPB 官方標準。貸款本金與利息未知時只依所選用途整筆計一次。",
     "\n【財務安全自我確認，非驗證結果】",
     `緊急預備金 3～6 個月：${state("emergencyConfirmed", "已準備緊急預備金")}`,
-    `已有退休理財規劃並定期檢視：${state("retirementConfirmed", "已有退休理財規劃")}`,
+    `已開始退休儲蓄或投資並定期檢視（不代表退休資金足夠）：${state("retirementConfirmed", "已開始為退休儲蓄或投資並定期檢視規劃")}`,
     "年齡、預計退休年齡、目前投資與退休資產、流動儲蓄金額、退休後生活費、風險承受能力、勞保勞退資格及預期給付：未提供。不可當作 0 或自行判定達標。",
     "\n【未來現金流設定】",
     `預測期間：${values.forecastYears ?? "未提供"} 年。${p?.change ? `自第 ${p.change.month} 個月起工作收入月平均 ${amount(p.change.employmentMonthly)}；必要生活費 ${amount(p.change.necessaryLiving ?? p.change.living)}；非必要消費 ${amount(p.change.discretionaryLiving)}。` : "未設定額外收入／生活費變動，不代表未來不會變化。"}`,

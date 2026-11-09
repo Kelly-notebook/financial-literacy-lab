@@ -188,7 +188,7 @@ test("兩項財務安全自評預設未勾、金額不變、恢復與第四單�
   const emergency = ui.getByLabel(
       "我已準備 3～6 個月必要生活支出的緊急預備金。",
     ),
-    retire = ui.getByLabel("我已有退休理財規劃，並定期檢視。");
+    retire = ui.getByLabel("我已開始為退休儲蓄或投資，並定期檢視規劃。");
   await expect(emergency).not.toBeChecked();
   await expect(retire).not.toBeChecked();
   const before = await ui

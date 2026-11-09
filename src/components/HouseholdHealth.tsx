@@ -357,11 +357,12 @@ export function FinancialSafety({
         </p>
       )}
       <Toggle form={f} name="retirementConfirmed">
-        我已有退休理財規劃，並定期檢視。
+        我已開始為退休儲蓄或投資，並定期檢視規劃。
       </Toggle>
+      <p className="hint">這只是自我確認，不代表退休資金已足夠。</p>
       {f.values.retirementConfirmed !== "yes" && (
         <p className="hint">
-          可在適合的時間整理退休目標，之後定期檢視；這是溫和提醒，不作退休達標判定。
+          可在適合的時間整理退休目標，之後定期檢視；這是自我確認，不代表退休資金已足夠，也不作退休達標判定。
         </p>
       )}
       <a

@@ -1596,3 +1596,30 @@ h3:not(:first-child) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.retirement-planning {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.retirement-planning > .ai-coach {
+  margin-top: 20px;
+}
+.retirement-planning .planning-row {
+  min-width: 0;
+  border: 1px solid var(--border, #dce5df);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.retirement-planning h3 {
+  margin-top: 24px;
+}
+.retirement-planning .note,
+.retirement-planning .hint {
+  overflow-wrap: anywhere;
+}
+.retirement-planning input,
+.retirement-planning select {
+  max-width: 100%;
+  min-width: 0;
+}

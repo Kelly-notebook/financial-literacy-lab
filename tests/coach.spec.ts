@@ -35,7 +35,7 @@ test("生活費19明細雙欄、窄手機單欄且數值與結果保留", async 
   ).toBe(true);
 });
 
-test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正確且不發外部請求", async ({
+test("三種Prompt複製最新家庭資料，快速／明細與原摘要均正確且不發外部請求", async ({
   page,
 }) => {
   const external: string[] = [];
@@ -61,7 +61,7 @@ test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正�
   const copied = () =>
     page.evaluate(() => (window as unknown as { copied: string }).copied);
   await expect(coach.getByRole("button", { name: /複製 Prompt/ })).toHaveCount(
-    4,
+    3,
   );
   const safety = await ui
       .getByRole("region", { name: "財務安全檢查" })
@@ -72,7 +72,6 @@ test("四種Prompt複製最新家庭資料，快速／明細與原摘要均正�
     ["財務健康檢查", "兩至三項財務風險"],
     ["消費與預算調整", "建議調整後金額"],
     ["ETF 投資規劃", "一個簡短長期複利例子"],
-    ["退休準備分析", "提早準備"],
   ]) {
     await coach
       .getByRole("button", { name: `複製 Prompt｜${title}`, exact: true })
@@ -150,7 +149,7 @@ test("剪貼簿失敗時保留表單與圖表，提供完整Prompt手動複製",
   ).toBe(true);
 });
 
-test("四種Prompt及完整摘要隨兩個安全勾選即時更新", async ({ page }) => {
+test("三種Prompt及完整摘要隨兩個安全勾選即時更新", async ({ page }) => {
   await page.addInitScript(() =>
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -166,7 +165,7 @@ test("四種Prompt及完整摘要隨兩個安全勾選即時更新", async ({ pa
   const emergency = ui.getByLabel(
       "我已準備 3～6 個月必要生活支出的緊急預備金。",
     ),
-    retire = ui.getByLabel("我已有退休理財規劃，並定期檢視。");
+    retire = ui.getByLabel("我已開始為退休儲蓄或投資，並定期檢視規劃。");
   for (const [emergencyChecked, retirementChecked] of [
     [false, false],
     [true, false],
@@ -188,8 +187,8 @@ test("四種Prompt及完整摘要隨兩個安全勾選即時更新", async ({ pa
       );
       expect(text).toContain(
         retirementChecked
-          ? "使用者自我確認已有退休理財規劃"
-          : "尚未確認已有退休理財規劃",
+          ? "使用者自我確認已開始為退休儲蓄或投資並定期檢視規劃"
+          : "尚未確認已開始為退休儲蓄或投資並定期檢視規劃",
       );
     }
   }

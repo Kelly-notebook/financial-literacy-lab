@@ -1,3 +1,9 @@
+import { RetirementPlanning } from "../components/RetirementPlanning";
+import {
+  retirementSummary,
+  type BudgetTransfer,
+} from "../lib/retirementPlanning";
+import { draftIssue } from "../lib/savingsComparison";
 import { useEffect, useState } from "react";
 import type { RetirementTransfer } from "../lib/savingsComparison";
 import { useLastValidResult } from "../hooks/useNumericDrafts";
@@ -28,7 +34,12 @@ import {
 export default function Retirement({
   incoming,
   onConsumed,
-}: { incoming?: RetirementTransfer; onConsumed?: () => void } = {}) {
+  getBudget,
+}: {
+  incoming?: RetirementTransfer;
+  onConsumed?: () => void;
+  getBudget?: () => BudgetTransfer | undefined;
+} = {}) {
   const f = useForm({
     ...assetDefaults,
     initial: "10000000",
@@ -115,6 +126,31 @@ export default function Retirement({
     }),
   ];
   const r = useLastValidResult(result, f.revision);
+  const fields: Parameters<typeof draftIssue>[1] = [
+    ["rate", "提領率", { min: 1, max: 10 }],
+    ["annual", "報酬率", { min: 0, max: 10 }],
+    ["inflation", "通膨率", { min: 0, max: 5 }],
+    ["age", "退休起始年齡", { min: 18, max: 100, integer: true }],
+    ["years", "期間", { min: 10, max: 50, integer: true }],
+  ];
+  if (f.values.mode === "need") {
+    if (f.values.gapMode === "direct") fields.push(["gap", "每月需求"]);
+    else fields.push(["expenses", "生活費"], ["income", "固定收入"]);
+  } else if (f.values.assetMode === "shares") {
+    for (let i = 1; i <= Number(f.values.holdingCount); i++)
+      fields.push(
+        [`shares${i}`, "股數", { min: 0, max: 1e12, integer: true }],
+        [`price${i}`, "股價"],
+      );
+  } else fields.push(["initial", "起始市值"]);
+  const planningSimulation = retirementSummary(
+    f.values,
+    r?.input,
+    r?.rows,
+    draftIssue(f.values, fields) ?? result.error,
+    source,
+    r,
+  );
   return (
     <div className="workspace">
       <section className="panel inputs">
@@ -128,8 +164,10 @@ export default function Retirement({
             <p>已帶入長期複利的期末資產，作為退休起始市值。</p>
             <p className="hint">
               來源：{source.years} 年累積・{source.scenario}・NT${" "}
-              {money(source.assets, 2)}
-              。這是未來退休時的名目資產，不是今天的持有資產；可自行修改，不自動同步。未來月提領不等於今天生活費的購買力。通膨與實質金額以退休起始年為基準，未再折算累積期間；4%
+              {money(source.assets, 2)}。
+              {source.baseYear !== undefined &&
+                `累積時間基準：${source.baseYear} 年起，約 ${source.baseYear + source.years} 年期末。`}
+              這是未來退休時的名目資產，不是今天的持有資產；可自行修改，不自動同步。未來月提領不等於今天生活費的購買力。通膨與實質金額以退休起始年為基準，未再折算累積期間；4%
               僅為教育情境，不保證資產持續支應退休生活。
             </p>
           </div>
@@ -455,6 +493,10 @@ export default function Retirement({
           </>
         )}
       </section>
+      <RetirementPlanning
+        simulationSummary={planningSimulation}
+        getBudget={getBudget}
+      />
     </div>
   );
 }

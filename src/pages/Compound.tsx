@@ -1,3 +1,4 @@
+import { currentTaipeiMonth } from "../lib/budget";
 import { useEffect, useState } from "react";
 import {
   compoundDraftIssue,
@@ -112,7 +113,12 @@ export default function Compound({
     retirementTransferIssue(comparison.data?.enhanced.value);
   const sendRetirement = (assets: number, scenario: string) => {
     if (!onRetirement || mainIssue || retirementTransferIssue(assets)) return;
-    onRetirement({ assets, years: r!.years, scenario });
+    onRetirement({
+      assets,
+      years: r!.years,
+      scenario,
+      baseYear: Number(currentTaipeiMonth().slice(0, 4)),
+    });
   };
   return (
     <div className="workspace">

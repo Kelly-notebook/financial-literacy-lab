@@ -1,6 +1,7 @@
 import { AICoach } from "../components/AICoach";
 import { householdSummary } from "../lib/householdSummary";
-import { useRef } from "react";
+import type { BudgetTransfer } from "../lib/retirementPlanning";
+import { useEffect, useRef } from "react";
 import { useBudgetForm } from "../hooks/useBudgetForm";
 import { money as formatMoney } from "../lib/finance";
 import {
@@ -47,9 +48,11 @@ const loanFields = [
 export default function Budget({
   onOpenRetirement,
   onCompound,
+  onSnapshot,
 }: {
   onOpenRetirement?: () => void;
   onCompound?: (monthly: number) => void;
+  onSnapshot?: (snapshot: BudgetTransfer) => void;
 } = {}) {
   const f = useBudgetForm({
     mode: "monthly",
@@ -230,6 +233,13 @@ export default function Budget({
   const r = result.data ?? lastValid.current;
   const c = r?.current;
   const fullSummary = householdSummary(f.values, r);
+  useEffect(() => {
+    onSnapshot?.({
+      values: { ...f.values },
+      snapshot: result.data,
+      summary: fullSummary,
+    });
+  }, [f.values, r, fullSummary, onSnapshot]);
   return (
     <div className="workspace budget-workspace">
       <section className="panel inputs">
