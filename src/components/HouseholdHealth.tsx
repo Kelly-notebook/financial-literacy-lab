@@ -1,3 +1,4 @@
+import { BudgetReferenceCards } from "./BudgetReferenceCards";
 import { selectedBudgetMode } from "../lib/budgetModes";
 import { draftIssue } from "../lib/savingsComparison";
 import { useState } from "react";
@@ -5,6 +6,7 @@ import { money as formatMoney } from "../lib/finance";
 import type { BudgetRow } from "../lib/budget";
 import {
   healthCheck,
+  budgetReferenceCards,
   entryGroup,
   investmentCheck,
   detailLimits,
@@ -58,6 +60,10 @@ export function HouseholdHealth({
   const h =
     result.data ??
     healthCheck(entries, c.income, categories, undefined, mode.mode);
+  const cards = budgetReferenceCards(
+    h.groups,
+    mode.monthlyIncome !== undefined,
+  );
   const transferIssue = draftIssue(f.values, [
     ["etfMonthly", "每月預計投入 ETF 金額"],
   ]);
@@ -184,40 +190,7 @@ export function HouseholdHealth({
             （含已選擇納入的現金收入）。推薦以此月平均 × 12
             年化，不將月薪與年薪再次相加，也不代表逐月實際入帳。
           </p>
-          <div className="health-groups">
-            {h.groups.map((g) => (
-              <div
-                className={`health-group tone-${mode.monthlyIncome === undefined ? "unknown" : g.tone}`}
-                data-group={g.id}
-                data-tone={
-                  mode.monthlyIncome === undefined ? "unknown" : g.tone
-                }
-                key={g.id}
-              >
-                <span>
-                  {g.id === "wants" ? "品質生活（非必要消費）" : g.name}
-                </span>
-                <strong>
-                  {mode.monthlyIncome === undefined
-                    ? "收入待確認"
-                    : percent(g.ratio)}
-                </strong>
-                <small>參考目標 {g.reference}%</small>
-                <p>本月指定 NT$ {money(g.value)}</p>
-                <p>
-                  每月參考金額：
-                  {mode.monthlyIncome === undefined
-                    ? "收入待確認"
-                    : `NT$ ${money((mode.monthlyIncome * g.reference) / 100)}`}
-                </p>
-                <p>
-                  {mode.monthlyIncome === undefined
-                    ? "目前收入未完成，暫不判定比例狀態。"
-                    : g.message}
-                </p>
-              </div>
-            ))}
-          </div>
+          <BudgetReferenceCards cards={cards} />
           <p className="reference-disclaimer">
             經典 50／30／20
             保留為經典參考；其他三種比例及收入門檻是本站教育性設計，不是官方統計標準。比例是參考目標，不是支出上限、必須花完的額度或強制儲蓄額度。低於消費預算或高於儲蓄目標不屬異常。赤字與債務風險應先於比例檢視。

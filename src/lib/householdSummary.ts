@@ -2,6 +2,7 @@ import { selectedBudgetMode } from "./budgetModes";
 import type { BudgetInput, BudgetRow } from "./budget";
 import {
   healthCheck,
+  budgetReferenceCards,
   entryGroup,
   groupNames,
   type BudgetEntry,
@@ -130,9 +131,12 @@ export function householdSummary(
   );
   if (c) {
     const h = healthCheck(entries, c.income, categories, undefined, mode.mode);
-    for (const g of h.groups)
+    for (const g of budgetReferenceCards(
+      h.groups,
+      mode.monthlyIncome !== undefined,
+    ))
       lines.push(
-        `${g.name}：${amount(g.value)}；占同一稅後月收入 ${ratio(g.ratio)}；參考目標 ${g.reference}%；每月參考金額 ${amount(mode.monthlyIncome === undefined ? undefined : (mode.monthlyIncome * g.reference) / 100)}；${mode.monthlyIncome === undefined ? "目前收入未完成，暫不判定比例狀態。" : g.message}`,
+        `${g.name}：${amount(g.value)}；占同一稅後月收入 ${ratio(g.ratio)}；參考目標 ${g.reference}%；每月參考金額 ${amount(g.referenceAmount ?? undefined)}；${g.message}`,
       );
     lines.push(
       "各筆用途分類：" +

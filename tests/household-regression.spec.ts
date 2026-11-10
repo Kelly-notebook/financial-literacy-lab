@@ -146,12 +146,12 @@ test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", a
   await ui.getByLabel("每月預計投入 ETF 金額").fill("10000");
   await expect(ui.locator('[data-group="savings"]')).toHaveAttribute(
     "data-tone",
-    "watch",
+    "normal",
   );
   await ui.getByLabel("每月預計投入 ETF 金額").fill("20000");
   await expect(ui.locator('[data-group="savings"]')).toHaveAttribute(
     "data-tone",
-    "green",
+    "normal",
   );
   await ui.getByLabel("伙食", { exact: true }).fill("46000");
   await expect(ui.locator('[data-group="needs"]')).toHaveAttribute(

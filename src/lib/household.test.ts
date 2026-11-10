@@ -97,9 +97,9 @@ describe("CFPB 與本站警示邊界", () => {
     ["wants", 30, "normal"],
     ["wants", 30.01, "pink"],
     ["savings", 9.99, "yellow"],
-    ["savings", 10, "watch"],
-    ["savings", 19.99, "watch"],
-    ["savings", 20, "green"],
+    ["savings", 10, "normal"],
+    ["savings", 19.99, "normal"],
+    ["savings", 20, "normal"],
   ] as const)("%s %s% 狀態 %s", (id, ratio, tone) =>
     expect(groupState(id, ratio).tone).toBe(tone),
   );

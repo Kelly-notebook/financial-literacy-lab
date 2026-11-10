@@ -4,7 +4,13 @@ import {
   recommendBudgetMode,
   selectedBudgetMode,
 } from "./budgetModes";
-import { groupState, healthCheck, detailLimits } from "./health";
+import {
+  groupState,
+  healthCheck,
+  detailLimits,
+  budgetCardState,
+  budgetReferenceCards,
+} from "./health";
 import { sanitiseBudgetValues } from "./budgetStorage";
 import { householdSummary } from "./householdSummary";
 import {
@@ -133,7 +139,7 @@ describe("收入自動預算模式", () => {
   });
   it("低於消費或高於儲蓄無異常，比例差本身不是減支理由；赤字優先", () => {
     expect(groupState("wants", 10, false, "quality").tone).toBe("normal");
-    expect(groupState("savings", 60, false, "quality").tone).toBe("green");
+    expect(groupState("savings", 60, false, "quality").tone).toBe("normal");
     expect(groupState("wants", 40, false, "quality").tone).toBe("pink");
     expect(groupState("wants", 40, false, "quality").message).toContain(
       "不是財務風險或減支理由",
@@ -202,5 +208,40 @@ describe("預算卡片顏色跟隨目前模式", () => {
     expect(groupState("needs", 47.63, false, "balanced").tone).toBe("pink");
     expect(groupState("wants", 25.65, false, "balanced").tone).toBe("normal");
     expect(groupState("savings", 5.5, false, "balanced").tone).toBe("yellow");
+  });
+});
+
+describe("單一卡片狀態來源", () => {
+  it("非有限值與未完成收入不假裝一般；顯示比例與警示一起轉未知", () => {
+    for (const ratio of [null, NaN, Infinity])
+      expect(budgetCardState("needs", ratio, 45).tone).toBe("unknown");
+    const h = healthCheck(
+      [{ id: "needs", name: "必要", value: 68310, group: "needs", color: "" }],
+      100000,
+      {},
+      undefined,
+      "balanced",
+    );
+    const cards = budgetReferenceCards(h.groups, false);
+    expect(cards[0].ratio).toBeNull();
+    expect(cards[0].reference).toBe(45);
+    expect(cards[0].tone).toBe("unknown");
+    expect(cards[0].referenceAmount).toBeNull();
+    expect(h.groups[0].ratio).toBe(68.31);
+    expect(h.groups[0].tone).toBe("pink");
+  });
+  it("參考文字、超標旗標與顏色從同一原始值建立，不使用顯示字串", () => {
+    const state = budgetCardState("needs", 45.000001, 45);
+    expect(state).toMatchObject({
+      ratio: 45.000001,
+      reference: 45,
+      aboveReference: true,
+      tone: "pink",
+    });
+    expect(budgetCardState("savings", 15, 25)).toMatchObject({
+      aboveReference: false,
+      tone: "normal",
+    });
+    expect(budgetCardState("savings", 9.999999, 25).tone).toBe("yellow");
   });
 });

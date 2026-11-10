@@ -127,7 +127,7 @@ test("300萬家庭品質消費不機械減支，三份Prompt完整保留資料�
   await expect(ui.locator(".health-advice li")).toHaveCount(0);
   await expect(ui.locator('[data-group="savings"]')).toHaveAttribute(
     "data-tone",
-    "green",
+    "normal",
   );
   await expect(ui.locator('[data-group="wants"]')).toHaveAttribute(
     "data-tone",
@@ -163,7 +163,7 @@ test("300萬家庭品質消費不機械減支，三份Prompt完整保留資料�
   expect(t).toContain("ETF 投資：NT$ 200,000");
   await expect(ui.locator('[data-group="savings"]')).toHaveAttribute(
     "data-tone",
-    "green",
+    "normal",
   );
 });
 test("其他收入與現金股息只計一次，股息再投入不推高推薦級距", async ({
@@ -221,6 +221,21 @@ test("參考卡片整張粉紅／黃色樣式及手動、自動切換立即更�
   expect(
     await savings.evaluate((el) => getComputedStyle(el).backgroundColor),
   ).toBe("rgb(255, 248, 220)");
+  // Integrate the reported case through the real Budget -> HouseholdHealth wiring.
+  await ui.getByLabel("每月必要生活費總額", { exact: true }).fill("68310");
+  await ui.getByLabel("每月非必要消費總額", { exact: true }).fill("25850");
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("5540");
+  await expect(needs.locator("strong")).toHaveText("68.31%");
+  await expect(wants.locator("strong")).toHaveText("25.85%");
+  await expect(savings.locator("strong")).toHaveText("5.54%");
+  await expect(needs).toHaveAttribute("data-tone", "pink");
+  await expect(wants).toHaveAttribute("data-tone", "normal");
+  await expect(savings).toHaveAttribute("data-tone", "yellow");
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("6000");
+  await expect(needs).toHaveAttribute("data-tone", "pink");
+  await ui.getByLabel("每月必要生活費總額", { exact: true }).fill("47630");
+  await ui.getByLabel("每月非必要消費總額", { exact: true }).fill("25650");
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("5500");
   await ui.getByLabel("參考預算模式").selectOption("basic");
   await expect(needs).toHaveAttribute("data-tone", "normal");
   await expect(wants).toHaveAttribute("data-tone", "pink");
@@ -240,8 +255,8 @@ test("參考卡片整張粉紅／黃色樣式及手動、自動切換立即更�
   await ui.getByLabel("每月固定實領薪資").fill("100000");
   for (const [amount, tone] of [
     ["9990", "yellow"],
-    ["10000", "watch"],
-    ["25000", "green"],
+    ["10000", "normal"],
+    ["25000", "normal"],
   ]) {
     await ui.getByLabel("每月預計投入 ETF 金額").fill(amount);
     await expect(savings).toHaveAttribute("data-tone", tone);

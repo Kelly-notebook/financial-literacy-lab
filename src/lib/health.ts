@@ -185,42 +185,71 @@ export function detailComparison(
     annual: excess * 12,
   };
 }
+export type BudgetCardTone = "normal" | "pink" | "yellow" | "unknown";
+/** The sole color comparison. Use raw ratios and the same reference rendered by the card. */
+export function budgetCardState(
+  id: Group,
+  ratio: number | null,
+  reference: number,
+  incomeAvailable = true,
+): {
+  ratio: number | null;
+  reference: number;
+  aboveReference: boolean | null;
+  tone: BudgetCardTone;
+} {
+  if (
+    !incomeAvailable ||
+    ratio === null ||
+    !Number.isFinite(ratio) ||
+    !Number.isFinite(reference)
+  )
+    return { ratio: null, reference, aboveReference: null, tone: "unknown" };
+  const aboveReference = ratio > reference;
+  return {
+    ratio,
+    reference,
+    aboveReference,
+    tone:
+      id === "savings"
+        ? ratio < 10
+          ? "yellow"
+          : "normal"
+        : aboveReference
+          ? "pink"
+          : "normal",
+  };
+}
 export function groupState(
   id: Group,
   ratio: number | null,
   deficit = false,
   mode: BudgetMode = "classic",
 ) {
-  if (ratio === null)
-    return { tone: "unknown", message: "沒有正的稅後收入，暫不判定比例狀態。" };
-  const reference = budgetModes[mode][id];
+  const state = budgetCardState(id, ratio, budgetModes[mode][id]);
+  const reference = state.reference;
+  if (state.ratio === null)
+    return { ...state, message: "沒有正的稅後收入，暫不判定比例狀態。" };
   if (id !== "savings") {
-    const points = ratio - reference;
-    return points > 0
-      ? {
-          tone: "pink",
-          message: `高於參考目標 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；比例差異本身不是財務風險或減支理由，須先看現金流、安全及重要目標。`,
-        }
-      : {
-          tone: "normal",
-          message: "在參考目標內；低於消費比例不是異常，也不需要花完額度。",
-        };
-  }
-  if (ratio < reference)
+    const points = state.ratio - reference;
     return {
-      tone: ratio < 10 ? "yellow" : "watch",
-      message: `低於 ${reference}% 參考目標，可檢視退休、儲蓄與其他目標的安排；不是強制儲蓄額度，也不代表必須增加 ETF。${ratio < 10 ? "低於10%僅是教育性提醒，不是財務異常判定。" : ""}`,
+      ...state,
+      message: state.aboveReference
+        ? `高於參考目標 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；比例差異本身不是財務風險或減支理由，須先看現金流、安全及重要目標。`
+        : "在參考目標內；低於消費比例不是異常，也不需要花完額度。",
     };
-  return deficit
-    ? {
-        tone: "normal",
-        message:
-          "此項比例達到參考目標，但家庭仍有赤字，不能據此判定整體財務良好。",
-      }
-    : {
-        tone: "green",
-        message: `此項達到 ${reference}% 參考目標；高於目標不是異常，也不代表整體財務安全已經過驗證。`,
-      };
+  }
+  if (state.ratio < reference)
+    return {
+      ...state,
+      message: `低於 ${reference}% 參考目標，可檢視退休、儲蓄與其他目標的安排；不是強制儲蓄額度，也不代表必須增加 ETF。${state.ratio < 10 ? "低於10%僅是教育性提醒，不是財務異常判定。" : ""}`,
+    };
+  return {
+    ...state,
+    message: deficit
+      ? "此項比例達到參考目標，但家庭仍有赤字，不能據此判定整體財務良好。"
+      : `此項達到 ${reference}% 參考目標；高於目標不是異常，也不代表整體財務安全已經過驗證。`,
+  };
 }
 export function healthCheck(
   entries: BudgetEntry[],
@@ -245,14 +274,13 @@ export function healthCheck(
   const cashDeficit = Math.max(0, total - income);
   const groups = (["needs", "wants", "savings"] as const).map((id) => {
     const ratio = income > 0 ? (sums[id] / income) * 100 : null;
+    const state = groupState(id, ratio, cashDeficit > 0, mode);
     return {
       id,
       name: groupNames[id],
       value: sums[id],
-      ratio,
-      reference: budgetModes[mode][id],
-      referenceAmount: (income * budgetModes[mode][id]) / 100,
-      ...groupState(id, ratio, cashDeficit > 0, mode),
+      ...state,
+      referenceAmount: (income * state.reference) / 100,
     };
   });
   const advice = entries
@@ -274,6 +302,22 @@ export function healthCheck(
     emergencyMin: sums.needs * 3,
     emergencyMax: sums.needs * 6,
   };
+}
+/** Resolve raw data and income availability once; JSX and copied summaries render this exact model. */
+export function budgetReferenceCards(
+  groups: ReturnType<typeof healthCheck>["groups"],
+  incomeAvailable = true,
+) {
+  return groups.map((g) => {
+    const state = budgetCardState(g.id, g.ratio, g.reference, incomeAvailable);
+    return {
+      ...g,
+      ...state,
+      referenceAmount: state.ratio === null ? null : g.referenceAmount,
+      message:
+        state.ratio === null ? "目前收入未完成，暫不判定比例狀態。" : g.message,
+    };
+  });
 }
 export interface InvestmentNotice {
   kind: "deficit" | "affordability" | "emergency" | "planning";
