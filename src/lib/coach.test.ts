@@ -1,0 +1,477 @@
+import { describe, it, expect } from "vitest";
+import { householdSummary } from "./householdSummary";
+import {
+  coachTopics,
+  coachPrompt,
+  commonCoachRequirements,
+} from "./coachPrompts";
+import { budget, type BudgetInput } from "./budget";
+import { livingFields } from "./living";
+import { allocations, budgetEntries } from "./health";
+const input: BudgetInput = {
+  mode: "monthly",
+  salary: 100000,
+  annualBonus: 120000,
+  annualIncome: 1320000,
+  otherIncome: 2000,
+  investmentCash: 12000,
+  cashTreatment: "spend",
+  living: 30000,
+  livingMode: "total",
+  necessaryTotal: 20000,
+  discretionaryTotal: 10000,
+  livingDetails: { food: 18000, medical: 2000, dining: 3000 },
+  loans: [
+    { payment: 10000, months: 12 },
+    { payment: 2000, months: 6 },
+    { payment: 1000, months: 3 },
+    { payment: 0, months: 0 },
+  ],
+  purchasePrice: 120000,
+  purchaseFund: 0,
+  purchaseMonths: 12,
+  purchaseMonthly: 5000,
+  purchaseMode: "deadline",
+  purchaseCost: 0,
+  travelPrice: 60000,
+  travelFund: 0,
+  travelMonths: 12,
+  etfMonthly: 5000,
+  telecom: 0,
+  subscriptions: 0,
+  saving: 3000,
+  startMonth: "2026-11",
+};
+const values: Record<string, string> = {
+  mode: "monthly",
+  salary: "100000",
+  annualBonus: "120000",
+  annualIncome: "1320000",
+  otherIncome: "2000",
+  investmentCash: "12000",
+  cashTreatment: "spend",
+  livingMode: "total",
+  necessaryTotal: "20000",
+  discretionaryTotal: "10000",
+  food: "18000",
+  medical: "2000",
+  dining: "3000",
+  mortgage: "10000",
+  mortgageMonths: "12",
+  carLoan: "2000",
+  carLoanMonths: "6",
+  credit: "1000",
+  creditMonths: "3",
+  otherLoan: "0",
+  otherMonths: "0",
+  etfMonthly: "5000",
+  saving: "3000",
+  purchaseMode: "deadline",
+  purchasePrice: "120000",
+  purchaseFund: "0",
+  purchaseMonths: "12",
+  purchaseMonthly: "5000",
+  purchaseCost: "0",
+  travelPrice: "60000",
+  travelFund: "0",
+  travelMonths: "12",
+  emergencyConfirmed: "no",
+  retirementConfirmed: "yes",
+  forecastYears: "10",
+};
+function snapshot(p = input) {
+  const current = budget(p),
+    entries = budgetEntries(p, current);
+  return {
+    input: p,
+    current,
+    entries,
+    items: allocations(entries, current.remaining),
+  };
+}
+describe("家庭資料摘要與AI主題", () => {
+  it("快速模式只輸出有效雙總額，不帶入另存明細；每筆現金流與既有結果一致", () => {
+    const s = householdSummary(values, snapshot());
+    expect(s).toContain("每月家庭稅後可支配收入（規劃用月平均）：NT$ 113,000");
+    expect(s).toContain(
+      "每月總分配／總支出（含目標儲蓄與 ETF 現金流出）：NT$ 66,000",
+    );
+    expect(s).toContain("每月實際結餘或赤字：NT$ 47,000（結餘）");
+    expect(s).toContain("每日平均可支配金額：NT$ 1,566.67");
+    expect(s).toContain("生活費細項：未提供");
+    expect(s).not.toContain("伙食：NT$ 18,000");
+    expect(s).toContain("其他每月儲蓄目標：NT$ 3,000");
+    expect(s).toContain("儲蓄與財務目標：NT$ 8,000");
+  });
+  it("明細與用途分類沿用計算，不多加快速總額；無自由文字個資", () => {
+    const p = {
+      ...input,
+      livingMode: "detail" as const,
+      livingCategories: { medical: "wants" as const },
+    };
+    const s = householdSummary(
+      {
+        ...values,
+        livingMode: "detail",
+        group_medical: "wants",
+        purchaseName: "私密目標姓名地址",
+      },
+      snapshot(p),
+    );
+    expect(s).toContain("每月必要生活支出總額：NT$ 18,000");
+    expect(s).toContain("每月非必要消費總額：NT$ 5,000");
+    expect(s).toContain("醫藥費：NT$ 2,000；用途分類：非必要消費");
+    expect(s).not.toContain("私密目標姓名地址");
+    expect(s).toContain("每月實際結餘或赤字：NT$ 54,000");
+  });
+  it("新值即時反映，負結餘不歸零", () => {
+    const p = { ...input, salary: 10000, annualBonus: 0 };
+    const s = householdSummary(
+      { ...values, salary: "10000", annualBonus: "0" },
+      snapshot(p),
+    );
+    expect(s).toContain("每月實際結餘或赤字：NT$ -53,000（赤字）");
+  });
+  it("年薪不再加獎金，股息再投入不計現金收入", () => {
+    const p = {
+      ...input,
+      mode: "annual" as const,
+      cashTreatment: "reinvest" as const,
+    };
+    const s = householdSummary(
+      { ...values, mode: "annual", cashTreatment: "reinvest" },
+      snapshot(p),
+    );
+    expect(s).toContain("全年稅後工作總收入：NT$ 1,320,000");
+    expect(s).not.toContain("固定月薪（");
+    expect(s).toContain("本月計入的投資現金收入（月平均）：NT$ 0");
+    expect(s).toContain("每月家庭稅後可支配收入（規劃用月平均）：NT$ 112,000");
+  });
+  it("未知資料、空白、未勾選與暫用有效值均不捏造事實", () => {
+    const empty = householdSummary({ mode: "monthly", salary: "" });
+    expect(empty).toContain("固定月薪（使用者輸入的實際每月實領）：未提供");
+    expect(empty).toContain("每月家庭稅後可支配收入（規劃用月平均）：未提供");
+    expect(empty).toContain(
+      "已開始退休儲蓄或投資並定期檢視（不代表退休資金足夠）：未提供",
+    );
+    const s = householdSummary({ ...values, etfMonthly: "" }, snapshot());
+    expect(s).toContain(
+      "ETF 投資：未提供或待修正（畫面暫用最近有效值 NT$ 5,000）",
+    );
+    expect(s).toContain("尚未確認已準備緊急預備金");
+    expect(s).toContain("使用者自我確認已開始為退休儲蓄或投資並定期檢視規劃");
+    expect(s).toContain("利率、餘額、用途與本金／利息拆分：未提供");
+  });
+  it.each(coachTopics)("$title包含最新資料、對應任務及共同限制", (topic) => {
+    const s = householdSummary(values, snapshot()),
+      prompt = coachPrompt(s, topic.id);
+    expect(prompt.startsWith(`【本次分析任務：${topic.title}】`)).toBe(true);
+    expect(prompt.split(s)).toHaveLength(2);
+    expect(prompt.indexOf(topic.prompt)).toBeLessThan(prompt.indexOf(s));
+    expect(prompt.indexOf(s)).toBeLessThan(prompt.indexOf("【共同輸出要求】"));
+    expect(prompt).toContain(topic.prompt);
+    expect(prompt).toContain("150～250");
+    expect(prompt).toContain("嚴格、務實但尊重使用者");
+    expect(prompt).toContain("不是個人化證券投資指示");
+  });
+  it.each(coachTopics)("$title勾選與取消即時反映兩項安全資訊", (topic) => {
+    for (const checked of ["yes", "no"]) {
+      const text = coachPrompt(
+        householdSummary(
+          {
+            ...values,
+            emergencyConfirmed: checked,
+            retirementConfirmed: checked,
+          },
+          snapshot(),
+        ),
+        topic.id,
+      );
+      expect(text).toContain(
+        checked === "yes"
+          ? "使用者自我確認已準備緊急預備金"
+          : "尚未確認已準備緊急預備金",
+      );
+      expect(text).toContain(
+        checked === "yes"
+          ? "使用者自我確認已開始為退休儲蓄或投資並定期檢視規劃"
+          : "尚未確認已開始為退休儲蓄或投資並定期檢視規劃",
+      );
+      expect(text).toContain(
+        checked === "yes" ? "僅自我確認，未經驗證" : "未勾選不代表",
+      );
+    }
+    expect(topic.prompt.length).toBeLessThan(650);
+    expect(coachPrompt("資料", topic.id)).not.toMatch(
+      /三種方案|三種投資情境|5、10、20 年/,
+    );
+  });
+  it("預算主動檢視孝親負擔且不預設取消", () => {
+    for (const topic of coachTopics) {
+      expect(coachPrompt("完整摘要", topic.id)).toContain(
+        "而非不可調整的固定義務",
+      );
+      expect(coachPrompt("完整摘要", topic.id)).toContain("調整後的支援上限");
+      expect(coachPrompt("完整摘要", topic.id)).toContain(
+        "不要預設必須完全取消",
+      );
+      expect(coachPrompt("完整摘要", topic.id)).toContain("法定扶養義務");
+    }
+  });
+  it("共同規則不再強制所有主題減支，三主題結構明確不同", () => {
+    expect(commonCoachRequirements).not.toMatch(
+      /請優先回答|每月具體建議調整|本月.*兩項行動|哪些支出/,
+    );
+    expect(
+      new Set(coachTopics.map((t) => coachPrompt("完整原始資料", t.id))).size,
+    ).toBe(3);
+    const [health, spending, etf] = coachTopics;
+    expect(health.prompt).toContain("不要硬找問題");
+    expect(spending.prompt).toContain("不必強迫削減支出");
+    expect(etf.prompt).toContain("目前每月 ETF 投入金額及占收入比例");
+    expect(etf.prompt).toContain("不需要強制提出消費減支建議");
+  });
+});
+
+describe("簡潔條列教練：月現金流、家庭支援與條件機會成本", () => {
+  const details = Object.fromEntries(livingFields.map((f) => [f.id, 0]));
+  function family(food = 35000, parentSupport = 10000) {
+    const p: BudgetInput = {
+      ...input,
+      salary: 50000,
+      annualBonus: 600000,
+      annualIncome: 1200000,
+      otherIncome: 0,
+      investmentCash: 0,
+      cashTreatment: "exclude",
+      livingMode: "detail",
+      livingDetails: { ...details, food, parentSupport },
+      loans: [
+        { payment: 10000, months: 12 },
+        { payment: 0, months: 0 },
+        { payment: 0, months: 0 },
+        { payment: 0, months: 0 },
+      ],
+      purchasePrice: 0,
+      purchaseFund: 0,
+      travelPrice: 0,
+      travelFund: 0,
+      etfMonthly: 10000,
+      saving: 5000,
+    };
+    const v = {
+      ...values,
+      ...Object.fromEntries(
+        Object.entries(p.livingDetails!).map(([k, n]) => [k, String(n)]),
+      ),
+      salary: "50000",
+      annualBonus: "600000",
+      annualIncome: "1200000",
+      otherIncome: "0",
+      investmentCash: "0",
+      cashTreatment: "exclude",
+      livingMode: "detail",
+      carLoan: "0",
+      carLoanMonths: "0",
+      credit: "0",
+      creditMonths: "0",
+      otherLoan: "0",
+      otherMonths: "0",
+      purchasePrice: "0",
+      purchaseFund: "0",
+      travelPrice: "0",
+      travelFund: "0",
+      etfMonthly: "10000",
+      saving: "5000",
+    };
+    return { p, v, snap: snapshot(p) };
+  }
+  it.each(coachTopics)(
+    "$title使用三項簡短條列、禁止表格圖表，仍逐字保留完整資料",
+    (topic) => {
+      const f = family(),
+        s = householdSummary(f.v, f.snap),
+        prompt = coachPrompt(s, topic.id);
+      expect(prompt.split(s)).toHaveLength(2);
+      expect(prompt).toContain("使用繁體中文與新臺幣");
+      expect(prompt).toContain("以三個簡短的編號段落或條列項目回答");
+      expect(prompt).toContain("每項可以有簡短的小標題");
+      expect(prompt).toContain("不要產生任何表格、Markdown表格或圖表");
+      expect(prompt).toContain("不重畫收入分配、50／30／20");
+      expect(prompt).toContain("複利或退休提領圖表");
+      expect(prompt).toContain("不要使用程式碼區塊");
+      expect(prompt).toContain("三個主題應依任務調整小標題及分析重點");
+      for (const label of ["①財務狀況", "②主要問題", "③建議方向"])
+        expect(prompt).toContain(label);
+      expect(prompt).toContain("勿重複整理所有原始數據");
+      expect(prompt).toContain("不列長篇計算過程");
+      expect(prompt).toContain("150～250");
+      expect(prompt).not.toMatch(
+        /可使用簡短表格|必要時.*使用.*表格|自然組成一段或兩段文字|不要輸出標題|不要.*編號或固定格式/,
+      );
+      expect(s).toContain("固定月薪（使用者輸入的實際每月實領）：NT$ 50,000");
+      expect(s).toContain("年度獎金：NT$ 600,000");
+      expect(s).toContain("孝親費：NT$ 10,000");
+      expect(s).toContain("當期貸款付款總額：NT$ 10,000");
+      expect(s).toContain("ETF 投資：NT$ 10,000");
+      for (const field of livingFields) expect(s).toContain(`${field.name}：`);
+    },
+  );
+  it("全年獎金可補足，但固定月薪不足必要支出，不讓年均正結餘掩蓋風險", () => {
+    const f = family(60000);
+    expect(f.snap.current.income).toBe(100000);
+    expect(f.snap.current.remaining).toBe(5000);
+    expect(f.p.salary).toBeLessThan(60000 + f.snap.current.loan);
+    const text = coachPrompt(householdSummary(f.v, f.snap), "health");
+    expect(text).toContain("全年收支平衡，不代表每月現金流沒有壓力");
+    expect(text).toContain("指出獎金依賴及需跨月調度的金額");
+    expect(text).toContain("獎金分配準備金金額與可支應月數：未提供");
+    expect(text).toContain("也不能推定沒有準備金");
+    expect(text).toContain("可降低獎金依賴風險評估");
+  });
+  it("固定月薪可負擔必要與貸款，只是全部目標未覆蓋，不誇大立即危機", () => {
+    const f = family();
+    expect(f.snap.current.remaining).toBe(30000);
+    expect(f.p.salary).toBeGreaterThan(35000 + f.snap.current.loan);
+    expect(f.p.salary).toBeLessThan(
+      f.snap.current.income - f.snap.current.remaining,
+    );
+    const text = coachPrompt(householdSummary(f.v, f.snap), "etf");
+    expect(text).toContain(
+      "應區分財務安全風險與可調整的生活規劃，不誇大為立即危機",
+    );
+    expect(text).toContain("是否過度依賴年終獎金");
+  });
+  it("年薪模式即使藏有月薪獎金，也只輸出年薪與拆分未知", () => {
+    const f = family(),
+      p = { ...f.p, mode: "annual" as const },
+      s = householdSummary(
+        { ...f.v, mode: "annual", salary: "999999", annualBonus: "999999" },
+        snapshot(p),
+      );
+    expect(s).toContain("全年稅後工作總收入：NT$ 1,200,000");
+    expect(s).toContain("固定月薪及年度獎金拆分：未提供");
+    expect(s).not.toContain("999,999");
+    expect(s).not.toContain("固定月薪（使用者輸入");
+    expect(coachPrompt(s, "health")).toContain("不得推測每月現金流足夠或不足");
+  });
+  it("孝親1萬可能壓縮儲蓄，三個主題都檢視比例／分擔／自主性且不臆測動機", () => {
+    const f = family();
+    expect(f.snap.current.employmentMonthly).toBeGreaterThan(f.p.salary);
+    for (const topic of coachTopics) {
+      const t = coachPrompt(householdSummary(f.v, f.snap), topic.id);
+      for (const phrase of [
+        "占家庭收入與固定月薪的比例",
+        "主動把孝親費列為值得檢視的項目之一",
+        "夫妻及受扶養子女的生活品質",
+        "退休準備",
+        "醫療與扶養需求",
+        "其他家庭成員合理分擔",
+        "是否自主決定",
+        "家庭期待及人際壓力",
+        "不直接建議停止扶養",
+        "不得僅憑金額認定父母有情緒勒索",
+        "可負擔、可溝通的支援界線",
+      ])
+        expect(t).toContain(phrase);
+    }
+  });
+  it("有條件調整2千的月／年機會成本保留，複利不強制也不優先於安全", () => {
+    const f = family(),
+      adjusted = family(35000, 8000);
+    expect(adjusted.snap.current.remaining - f.snap.current.remaining).toBe(
+      2000,
+    );
+    expect(
+      (adjusted.snap.current.remaining - f.snap.current.remaining) * 12,
+    ).toBe(24000);
+    const t = coachPrompt(householdSummary(f.v, f.snap), "spending");
+    for (const phrase of [
+      "每月多2,000元、每年多24,000元",
+      "30年期間",
+      "假設年化總報酬率",
+      "月底投入",
+      "不保證收益",
+      "未來名目金額與今天購買力",
+      "退休首年提領",
+      "不必每次計算複利",
+      "不為展示複利任意要求減少孝親費",
+      "優先改善安全，不直接增加ETF",
+    ])
+      expect(t).toContain(phrase);
+    expect(coachTopics.find((x) => x.id === "etf")!.prompt).toContain(
+      "主題相關時才可",
+    );
+    expect(householdSummary(adjusted.v, adjusted.snap)).toContain(
+      "孝親費：NT$ 8,000",
+    );
+  });
+  it("高收入與合理消費保留，不因比例或非必要分類任意減支", () => {
+    const f = family(),
+      p = {
+        ...f.p,
+        salary: 250000,
+        annualBonus: 0,
+        annualIncome: 3000000,
+        livingDetails: {
+          ...details,
+          food: 35000,
+          clothing: 8000,
+          dining: 10000,
+        },
+        loans: f.p.loans.map((l) => ({ ...l, payment: 0 })),
+        etfMonthly: 80000,
+        saving: 25000,
+      };
+    const v = {
+      ...f.v,
+      ...Object.fromEntries(
+        Object.entries(p.livingDetails).map(([k, n]) => [k, String(n)]),
+      ),
+      salary: "250000",
+      annualBonus: "0",
+      annualIncome: "3000000",
+      mortgage: "0",
+      etfMonthly: "80000",
+      saving: "25000",
+      emergencyConfirmed: "yes",
+      retirementConfirmed: "yes",
+    };
+    const snap = snapshot(p);
+    expect(snap.current.remaining).toBeGreaterThan(0);
+    const s = householdSummary(v, snap),
+      t = coachPrompt(s, "spending");
+    expect(s).toContain("治裝費：NT$ 8,000");
+    expect(s).toContain("餐廳與日常娛樂：NT$ 10,000");
+    expect(t).toContain("不必強迫削減支出");
+    expect(t).toContain("沒有其他財務問題時機械式要求削減1,500元");
+    expect(t).toContain(
+      "尊重消費自由不能掩蓋明確的每月現金流風險與家庭支援負擔",
+    );
+    expect(t).toContain("高收入或自我確認本身不證明安全");
+  });
+});
+
+it("三個家庭教練的小標題依主題調整，分析原則與摘要結構不變", () => {
+  const titles = [
+    "財務狀況／主要風險／優先行動",
+    "預算判斷／可調項目／調整方向",
+    "投入持續性／資金風險／投資方向",
+  ];
+  for (const [i, topic] of coachTopics.entries()) {
+    expect(topic.prompt).toContain(titles[i]);
+    const s = householdSummary(values, snapshot()),
+      prompt = coachPrompt(s, topic.id);
+    expect(prompt.startsWith(`【本次分析任務：${topic.title}】`)).toBe(true);
+    expect(prompt.indexOf(s)).toBeGreaterThan(prompt.indexOf(topic.prompt));
+    expect(prompt.endsWith(commonCoachRequirements)).toBe(true);
+    expect(prompt.split(s)).toHaveLength(2);
+    for (const principle of [
+      "全年收支平衡，不代表每月現金流沒有壓力",
+      "不得僅憑金額認定父母有情緒勒索",
+      "不為展示複利任意要求減少孝親費",
+      "沒有其他財務問題時機械式要求削減1,500元",
+    ])
+      expect(prompt).toContain(principle);
+  }
+});
