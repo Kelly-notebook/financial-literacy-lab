@@ -156,7 +156,7 @@ test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", a
   await ui.getByLabel("伙食", { exact: true }).fill("46000");
   await expect(ui.locator('[data-group="needs"]')).toHaveAttribute(
     "data-tone",
-    "watch",
+    "pink",
   );
   await expect(ui.locator('[data-group="needs"]')).toContainText(
     "高於參考目標 6 個百分點",

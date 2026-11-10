@@ -134,7 +134,7 @@ describe("收入自動預算模式", () => {
   it("低於消費或高於儲蓄無異常，比例差本身不是減支理由；赤字優先", () => {
     expect(groupState("wants", 10, false, "quality").tone).toBe("normal");
     expect(groupState("savings", 60, false, "quality").tone).toBe("green");
-    expect(groupState("wants", 40, false, "quality").tone).toBe("watch");
+    expect(groupState("wants", 40, false, "quality").tone).toBe("pink");
     expect(groupState("wants", 40, false, "quality").message).toContain(
       "不是財務風險或減支理由",
     );
@@ -166,5 +166,41 @@ describe("收入自動預算模式", () => {
       expect(prompt).toContain("沒有其他財務問題時機械式要求削減1,500元");
       expect(prompt.endsWith(commonCoachRequirements)).toBe(true);
     }
+  });
+});
+
+describe("預算卡片顏色跟隨目前模式", () => {
+  it.each(Object.keys(budgetModes) as (keyof typeof budgetModes)[])(
+    "%s：消費只在嚴格高於參考比例時粉紅，不依賴赤字",
+    (mode) => {
+      for (const id of ["needs", "wants"] as const) {
+        const threshold = budgetModes[mode][id];
+        for (const deficit of [false, true]) {
+          expect(groupState(id, threshold - 0.01, deficit, mode).tone).toBe(
+            "normal",
+          );
+          expect(groupState(id, threshold, deficit, mode).tone).toBe("normal");
+          expect(groupState(id, threshold + 0.01, deficit, mode).tone).toBe(
+            "pink",
+          );
+        }
+      }
+    },
+  );
+  it.each(Object.keys(budgetModes) as (keyof typeof budgetModes)[])(
+    "%s：儲蓄只有低於10%%黃色，永不粉紅",
+    (mode) => {
+      for (const deficit of [false, true])
+        for (const ratio of [0, 5.5, 9.99, 10, 10.01, 19, 25, 30, 60]) {
+          const tone = groupState("savings", ratio, deficit, mode).tone;
+          expect(tone === "yellow").toBe(ratio < 10);
+          expect(tone).not.toBe("pink");
+        }
+    },
+  );
+  it("平衡型範例47.63／25.65／5.5顯示粉紅／一般／黃", () => {
+    expect(groupState("needs", 47.63, false, "balanced").tone).toBe("pink");
+    expect(groupState("wants", 25.65, false, "balanced").tone).toBe("normal");
+    expect(groupState("savings", 5.5, false, "balanced").tone).toBe("yellow");
   });
 });

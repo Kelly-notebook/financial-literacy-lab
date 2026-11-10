@@ -93,9 +93,9 @@ describe("新增支出與共同分類帳", () => {
 describe("CFPB 與本站警示邊界", () => {
   it.each([
     ["needs", 50, "normal"],
-    ["needs", 50.01, "watch"],
+    ["needs", 50.01, "pink"],
     ["wants", 30, "normal"],
-    ["wants", 30.01, "watch"],
+    ["wants", 30.01, "pink"],
     ["savings", 9.99, "yellow"],
     ["savings", 10, "watch"],
     ["savings", 19.99, "watch"],

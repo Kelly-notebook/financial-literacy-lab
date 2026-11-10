@@ -191,3 +191,63 @@ test("其他收入與現金股息只計一次，股息再投入不推高推薦�
   );
   await expect(ui.locator(".budget-mode")).toContainText("1,140,000");
 });
+
+test("參考卡片整張粉紅／黃色樣式及手動、自動切換立即更新", async ({ page }) => {
+  const ui = await open(page);
+  await ui.getByLabel("每月固定實領薪資").fill("100000");
+  await ui.getByLabel("每月必要生活費總額", { exact: true }).fill("47630");
+  await ui.getByLabel("每月非必要消費總額", { exact: true }).fill("25650");
+  await ui.getByText("大型購買與旅行目標", { exact: true }).click();
+  await ui.getByLabel("預計購買總金額", { exact: true }).fill("0");
+  await ui.getByLabel("每次旅行預算", { exact: true }).fill("0");
+  await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("5500");
+  const needs = ui.locator('[data-group="needs"]'),
+    wants = ui.locator('[data-group="wants"]'),
+    savings = ui.locator('[data-group="savings"]');
+  await expect(ui.locator(".budget-mode")).toHaveAttribute(
+    "data-mode",
+    "balanced",
+  );
+  await expect(needs).toContainText("47.63%");
+  await expect(wants).toContainText("25.65%");
+  await expect(savings).toContainText("5.5%");
+  await expect(needs).toHaveAttribute("data-tone", "pink");
+  await expect(wants).toHaveAttribute("data-tone", "normal");
+  await expect(savings).toHaveAttribute("data-tone", "yellow");
+  expect(
+    await needs.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgb(255, 240, 243)");
+  expect(
+    await savings.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgb(255, 248, 220)");
+  await ui.getByLabel("參考預算模式").selectOption("basic");
+  await expect(needs).toHaveAttribute("data-tone", "normal");
+  await expect(wants).toHaveAttribute("data-tone", "pink");
+  expect(
+    await wants.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgb(255, 240, 243)");
+  await ui.getByLabel("參考預算模式").selectOption("auto");
+  await expect(needs).toHaveAttribute("data-tone", "pink");
+  await expect(wants).toHaveAttribute("data-tone", "normal");
+  await ui.getByLabel("每月固定實領薪資").fill("99000");
+  await expect(ui.locator(".budget-mode")).toHaveAttribute(
+    "data-mode",
+    "basic",
+  );
+  await expect(needs).toHaveAttribute("data-tone", "normal");
+  await expect(wants).toHaveAttribute("data-tone", "pink");
+  await ui.getByLabel("每月固定實領薪資").fill("100000");
+  for (const [amount, tone] of [
+    ["9990", "yellow"],
+    ["10000", "watch"],
+    ["25000", "green"],
+  ]) {
+    await ui.getByLabel("每月預計投入 ETF 金額").fill(amount);
+    await expect(savings).toHaveAttribute("data-tone", tone);
+  }
+  await ui.getByLabel("每月必要生活費總額", { exact: true }).fill("45000");
+  await expect(needs).toHaveAttribute("data-tone", "normal");
+  await ui.getByLabel("每月非必要消費總額", { exact: true }).fill("30000");
+  await expect(wants).toHaveAttribute("data-tone", "normal");
+});

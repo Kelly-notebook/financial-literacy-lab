@@ -198,7 +198,7 @@ export function groupState(
     const points = ratio - reference;
     return points > 0
       ? {
-          tone: deficit ? "pink" : "watch",
+          tone: "pink",
           message: `高於參考目標 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；比例差異本身不是財務風險或減支理由，須先看現金流、安全及重要目標。`,
         }
       : {
