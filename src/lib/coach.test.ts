@@ -233,7 +233,7 @@ describe("家庭資料摘要與AI主題", () => {
   });
 });
 
-describe("純文字教練：月現金流、家庭支援與條件機會成本", () => {
+describe("簡潔條列教練：月現金流、家庭支援與條件機會成本", () => {
   const details = Object.fromEntries(livingFields.map((f) => [f.id, 0]));
   function family(food = 35000, parentSupport = 10000) {
     const p: BudgetInput = {
@@ -287,23 +287,27 @@ describe("純文字教練：月現金流、家庭支援與條件機會成本", (
     return { p, v, snap: snapshot(p) };
   }
   it.each(coachTopics)(
-    "$title禁止表格、重畫圖表與制式格式，仍逐字保留完整資料",
+    "$title使用三項簡短條列、禁止表格圖表，仍逐字保留完整資料",
     (topic) => {
       const f = family(),
         s = householdSummary(f.v, f.snap),
         prompt = coachPrompt(s, topic.id);
       expect(prompt.split(s)).toHaveLength(2);
-      expect(prompt).toContain("只使用繁體中文純文字");
+      expect(prompt).toContain("使用繁體中文與新臺幣");
+      expect(prompt).toContain("以三個簡短的編號段落或條列項目回答");
+      expect(prompt).toContain("每項可以有簡短的小標題");
       expect(prompt).toContain("不要產生任何表格、Markdown表格或圖表");
       expect(prompt).toContain("不重畫收入分配、50／30／20");
       expect(prompt).toContain("複利或退休提領圖表");
-      expect(prompt).toContain("不要輸出標題、Markdown格式、編號或固定格式");
-      expect(prompt).toContain("自然組成一段或兩段文字");
+      expect(prompt).toContain("不要使用程式碼區塊");
+      expect(prompt).toContain("三個主題應依任務調整小標題及分析重點");
+      for (const label of ["①財務狀況", "②主要問題", "③建議方向"])
+        expect(prompt).toContain(label);
       expect(prompt).toContain("勿重複整理所有原始數據");
       expect(prompt).toContain("不列長篇計算過程");
       expect(prompt).toContain("150～250");
       expect(prompt).not.toMatch(
-        /可使用簡短表格|必要時.*使用.*表格|請依序回答/,
+        /可使用簡短表格|必要時.*使用.*表格|自然組成一段或兩段文字|不要輸出標題|不要.*編號或固定格式/,
       );
       expect(s).toContain("固定月薪（使用者輸入的實際每月實領）：NT$ 50,000");
       expect(s).toContain("年度獎金：NT$ 600,000");
@@ -446,4 +450,28 @@ describe("純文字教練：月現金流、家庭支援與條件機會成本", (
     );
     expect(t).toContain("高收入或自我確認本身不證明安全");
   });
+});
+
+it("三個家庭教練的小標題依主題調整，分析原則與摘要結構不變", () => {
+  const titles = [
+    "財務狀況／主要風險／優先行動",
+    "預算判斷／可調項目／調整方向",
+    "投入持續性／資金風險／投資方向",
+  ];
+  for (const [i, topic] of coachTopics.entries()) {
+    expect(topic.prompt).toContain(titles[i]);
+    const s = householdSummary(values, snapshot()),
+      prompt = coachPrompt(s, topic.id);
+    expect(prompt.startsWith(`【本次分析任務：${topic.title}】`)).toBe(true);
+    expect(prompt.indexOf(s)).toBeGreaterThan(prompt.indexOf(topic.prompt));
+    expect(prompt.endsWith(commonCoachRequirements)).toBe(true);
+    expect(prompt.split(s)).toHaveLength(2);
+    for (const principle of [
+      "全年收支平衡，不代表每月現金流沒有壓力",
+      "不得僅憑金額認定父母有情緒勒索",
+      "不為展示複利任意要求減少孝親費",
+      "沒有其他財務問題時機械式要求削減1,500元",
+    ])
+      expect(prompt).toContain(principle);
+  }
 });

@@ -78,9 +78,13 @@ test("三種Prompt複製最新家庭資料，快速／明細與原摘要均正�
       .click();
     const text = await copied();
     expect(text).toContain(phrase);
-    expect(text).toContain("只使用繁體中文純文字");
+    expect(text).toContain("使用繁體中文與新臺幣");
+    expect(text).toContain("以三個簡短的編號段落或條列項目回答");
+    expect(text).toContain("每項可以有簡短的小標題");
     expect(text).toContain("不要產生任何表格、Markdown表格或圖表");
-    expect(text).toContain("自然組成一段或兩段文字");
+    expect(text).toContain("不要使用程式碼區塊");
+    expect(text).not.toContain("自然組成一段或兩段文字");
+    expect(text).not.toContain("不要輸出標題");
     expect(text).toContain("全年收支平衡，不代表每月現金流沒有壓力");
     expect(text).not.toContain("必要時可使用簡短表格");
     expect(text).toContain(
