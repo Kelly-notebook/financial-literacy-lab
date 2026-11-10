@@ -1,3 +1,4 @@
+import { selectedBudgetMode, budgetModeOptions } from "../lib/budgetModes";
 import { AICoach } from "../components/AICoach";
 import { householdSummary } from "../lib/householdSummary";
 import type { BudgetTransfer } from "../lib/retirementPlanning";
@@ -56,6 +57,7 @@ export default function Budget({
 } = {}) {
   const f = useBudgetForm({
     mode: "monthly",
+    budgetMode: "auto",
     salary: "",
     annualBonus: "0",
     annualIncome: "",
@@ -233,6 +235,7 @@ export default function Budget({
   const r = result.data ?? lastValid.current;
   const c = r?.current;
   const fullSummary = householdSummary(f.values, r);
+  const referenceMode = selectedBudgetMode(f.values, c?.income);
   useEffect(() => {
     onSnapshot?.({
       values: { ...f.values },
@@ -294,9 +297,32 @@ export default function Budget({
             : "有年度獎金時，總收入及試算結果以月平均呈現；獎金 ÷ 12 只是規劃基準，不代表每月固定入帳。"}
         </p>
         <p className="hint">
-          50／30／20
-          必須使用稅後可支配收入。若手邊資料是稅前年薪，請先扣除稅費，改填稅後收入；此處不自動推算所得稅。
+          所有參考預算模式均使用稅後可支配收入。若手邊資料是稅前年薪，請先扣除稅費，改填稅後收入；此處不自動推算所得稅。
         </p>
+        <Select
+          form={f}
+          name="budgetMode"
+          label="參考預算模式"
+          options={budgetModeOptions}
+        />
+        <div
+          className="note budget-mode"
+          role="status"
+          data-mode={referenceMode.mode}
+        >
+          <p>目前採用：{referenceMode.preset.name}</p>
+          <p>{referenceMode.note}</p>
+          <p>
+            家庭全年稅後可支配收入（有效月平均 × 12）：
+            {referenceMode.annualIncome === undefined
+              ? "尚無有效資料"
+              : `NT$ ${money(referenceMode.annualIncome)}`}
+            。
+          </p>
+          <p className="hint">
+            自動推薦：低於120萬採基礎型；120萬以上未滿240萬採平衡型；240萬以上採品質型。比例僅供參考，不是消費上限或必須花完的額度；可隨時手動改選。
+          </p>
+        </div>
         <Field form={f} name="otherIncome" label="其他每月固定收入" />
         <Details title="投資現金收入">
           <Field

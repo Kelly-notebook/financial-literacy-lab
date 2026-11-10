@@ -1,3 +1,4 @@
+import { selectedBudgetMode } from "./budgetModes";
 import type { BudgetInput, BudgetRow } from "./budget";
 import {
   healthCheck,
@@ -33,6 +34,7 @@ export function householdSummary(
   const categories = Object.fromEntries(
     entries.map((e) => [e.id, values[`group_${e.id}`] ?? e.group]),
   ) as Record<string, Group>;
+  const mode = selectedBudgetMode(values, c?.income);
   const known = (key: string, n?: number) => {
     const draft = parseNumericInput(values[key]);
     if (!Number.isFinite(draft) || draft < 0 || draft > 1e12)
@@ -122,13 +124,15 @@ export function householdSummary(
     `每月實際結餘或赤字：${amount(c?.remaining)}${c ? (c.remaining < 0 ? "（赤字）" : c.remaining === 0 ? "（無結餘）" : "（結餘）") : ""}`,
     `每日平均可支配金額：${amount(c?.daily)}（當月天數換算，非銀行餘額）。`,
     `對帳：月收入 − 生活支出與貸款 − 目標儲蓄及 ETF ＝ 月結餘。上述子項、CFPB 與環圈是同筆資金的不同呈現，不可再相加扣款。`,
-    "\n【CFPB 50／30／20：依用途，不同於環圈資金流向】",
+    "\n【參考預算模式：依用途，不同於環圈資金流向】",
+    `模式選擇：${mode.selection === "auto" ? "依收入自動推薦" : "手動選擇"}；目前採用 ${mode.preset.name}。${mode.note}`,
+    `推薦基準家庭全年稅後可支配收入：${amount(mode.annualIncome)}（同一有效家庭月平均 × 12，不重複加計月薪、年薪或獎金）。`,
   );
   if (c) {
-    const h = healthCheck(entries, c.income, categories);
+    const h = healthCheck(entries, c.income, categories, undefined, mode.mode);
     for (const g of h.groups)
       lines.push(
-        `${g.name}：${amount(g.value)}；占同一稅後月收入 ${ratio(g.ratio)}；參考${g.id === "savings" ? "目標" : "上限"} ${g.reference}%；${g.message}`,
+        `${g.name}：${amount(g.value)}；占同一稅後月收入 ${ratio(g.ratio)}；參考目標 ${g.reference}%；每月參考金額 ${amount(mode.monthlyIncome === undefined ? undefined : (mode.monthlyIncome * g.reference) / 100)}；${mode.monthlyIncome === undefined ? "目前收入未完成，暫不判定比例狀態。" : g.message}`,
       );
     lines.push(
       "各筆用途分類：" +
@@ -139,7 +143,8 @@ export function householdSummary(
     );
   } else lines.push("CFPB 分析結果：未提供（尚無完整有效試算）。");
   lines.push(
-    "50／30／20 是參考法則，不是硬性標準；儲蓄低於 10% 黃色提醒是本站門檻，非 CFPB 官方標準。貸款本金與利息未知時只依所選用途整筆計一次。",
+    "經典50／30／20為經典參考；其餘比例及收入門檻是本站教育性設計，不是官方統計標準。所有比例是參考目標，不是支出上限、必須花完的額度或強制儲蓄額。低於消費比例或高於儲蓄目標不是異常。儲蓄低於10%僅教育性提示，不證明缺乏合理安排；貸款本金與利息未知時整筆只計一次。",
+    "每月預算結餘是尚未分配的現金流，不是實際累積現金資產；不能只憑結餘大就認定現金過多或強迫投資。缺少現金存量、用途與緊急預備金資料時不得判定資產配置失衡。",
     "\n【財務安全自我確認，非驗證結果】",
     `緊急預備金 3～6 個月：${state("emergencyConfirmed", "已準備緊急預備金")}`,
     `已開始退休儲蓄或投資並定期檢視（不代表退休資金足夠）：${state("retirementConfirmed", "已開始為退休儲蓄或投資並定期檢視規劃")}`,

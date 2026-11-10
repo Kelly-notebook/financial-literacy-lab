@@ -93,9 +93,9 @@ describe("新增支出與共同分類帳", () => {
 describe("CFPB 與本站警示邊界", () => {
   it.each([
     ["needs", 50, "normal"],
-    ["needs", 50.01, "pink"],
+    ["needs", 50.01, "watch"],
     ["wants", 30, "normal"],
-    ["wants", 30.01, "pink"],
+    ["wants", 30.01, "watch"],
     ["savings", 9.99, "yellow"],
     ["savings", 10, "watch"],
     ["savings", 19.99, "watch"],
@@ -104,7 +104,9 @@ describe("CFPB 與本站警示邊界", () => {
     expect(groupState(id, ratio).tone).toBe(tone),
   );
   it("必要支出56%指出超過6百分點，不只靠顏色", () =>
-    expect(groupState("needs", 56).message).toContain("超出參考值 6 個百分點"));
+    expect(groupState("needs", 56).message).toContain(
+      "高於參考目標 6 個百分點",
+    ));
   it("赤字時，即使儲蓄20%以上也不給整體良好或綠色判定", () => {
     expect(groupState("savings", 30, true).tone).toBe("normal");
     expect(groupState("savings", 30, true).message).toContain("赤字");

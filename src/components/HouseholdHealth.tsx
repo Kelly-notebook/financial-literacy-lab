@@ -1,3 +1,4 @@
+import { selectedBudgetMode } from "../lib/budgetModes";
 import { draftIssue } from "../lib/savingsComparison";
 import { useState } from "react";
 import { money as formatMoney } from "../lib/finance";
@@ -50,10 +51,13 @@ export function HouseholdHealth({
   const limits = Object.fromEntries(
     Object.keys(detailLimits).map((id) => [id, f.n(`limit_${id}`)]),
   ) as Limits;
+  const mode = selectedBudgetMode(f.values, c.income);
   const result = safely(() =>
-    healthCheck(entries, c.income, categories, limits),
+    healthCheck(entries, c.income, categories, limits, mode.mode),
   );
-  const h = result.data ?? healthCheck(entries, c.income, categories);
+  const h =
+    result.data ??
+    healthCheck(entries, c.income, categories, undefined, mode.mode);
   const transferIssue = draftIssue(f.values, [
     ["etfMonthly", "每月預計投入 ETF 金額"],
   ]);
@@ -109,6 +113,9 @@ export function HouseholdHealth({
       )}
       <div className={c.remaining < 0 ? "note caution" : "note"}>
         <strong>剩餘金錢：NT$ {money(c.remaining)}</strong>
+        <p className="hint">
+          這是尚未分配的每月預算結餘，不是銀行存款或累積現金資產。
+        </p>
         {c.remaining < 0 && (
           <p>
             總分配超過收入，赤字 NT$ {money(c.deficit)}
@@ -165,36 +172,58 @@ export function HouseholdHealth({
       <ErrorNotice message={result.error} />
       {h && (
         <>
-          <h3>CFPB 50／30／20 收支參考</h3>
+          <h3>家庭參考預算比例</h3>
+          <p>
+            目前採用：{mode.preset.name}；必要 {mode.preset.needs}%／品質生活{" "}
+            {mode.preset.wants}%／儲蓄投資 {mode.preset.savings}
+            %。可在收入區切換參考預算模式。
+          </p>
+          <p className="hint">{mode.note}</p>
           <p className="hint">
             分母為每月稅後可支配收入 NT$ {money(c.income)}
-            （含已選擇納入的現金收入）。這是參考法則，不是所有家庭都必須遵守的硬性規定。
+            （含已選擇納入的現金收入）。推薦以此月平均 × 12
+            年化，不將月薪與年薪再次相加，也不代表逐月實際入帳。
           </p>
           <div className="health-groups">
             {h.groups.map((g) => (
               <div
-                className={`health-group tone-${g.tone}`}
+                className={`health-group tone-${mode.monthlyIncome === undefined ? "unknown" : g.tone}`}
                 data-group={g.id}
-                data-tone={g.tone}
+                data-tone={
+                  mode.monthlyIncome === undefined ? "unknown" : g.tone
+                }
                 key={g.id}
               >
-                <span>{g.name}</span>
-                <strong>{percent(g.ratio)}</strong>
-                <small>
-                  {g.id === "savings" ? "參考目標" : "參考上限"} {g.reference}%
-                </small>
+                <span>
+                  {g.id === "wants" ? "品質生活（非必要消費）" : g.name}
+                </span>
+                <strong>
+                  {mode.monthlyIncome === undefined
+                    ? "收入待確認"
+                    : percent(g.ratio)}
+                </strong>
+                <small>參考目標 {g.reference}%</small>
                 <p>本月指定 NT$ {money(g.value)}</p>
-                <p>{g.message}</p>
+                <p>
+                  每月參考金額：
+                  {mode.monthlyIncome === undefined
+                    ? "收入待確認"
+                    : `NT$ ${money((mode.monthlyIncome * g.reference) / 100)}`}
+                </p>
+                <p>
+                  {mode.monthlyIncome === undefined
+                    ? "目前收入未完成，暫不判定比例狀態。"
+                    : g.message}
+                </p>
               </div>
             ))}
           </div>
           <p className="reference-disclaimer">
-            50／30／20 是 CFPB 參考法則；儲蓄低於 10%
-            的黃色警戒是本站自訂教育性提醒，不是 CFPB
-            官方標準。若有赤字，應優先處理現金流，不能只看儲蓄比例。
+            經典 50／30／20
+            保留為經典參考；其他三種比例及收入門檻是本站教育性設計，不是官方統計標準。比例是參考目標，不是支出上限、必須花完的額度或強制儲蓄額度。低於消費預算或高於儲蓄目標不屬異常。赤字與債務風險應先於比例檢視。
           </p>
           <p className="hint">
-            各項只歸入一類。未分配的剩餘金錢不自動算已儲蓄；貸款本金與利息未拆分，暫依你選的分類整筆計一次，不能同時再加計本金為儲蓄。大型購買與旅行可分別調整分類。
+            各項只歸入一類。未分配的每月預算結餘不自動算已儲蓄，也不是實際累積現金資產；沒有現金存量及用途資料，不能判定現金過多。貸款本金與利息未拆分，暫依你選的分類整筆計一次，不能同時再加計本金為儲蓄。大型購買與旅行可分別調整分類。
           </p>
           <Details title="調整支出分類與參考上限">
             <h3>調整必要／非必要／儲蓄分類</h3>
@@ -251,8 +280,12 @@ export function HouseholdHealth({
           </p>
           {result.error ? (
             <p>參考上限有誤，修正後再顯示細項調整情境。</p>
-          ) : c.income <= 0 ? (
+          ) : mode.monthlyIncome === undefined ? (
             <p>尚無正的稅後收入，無法可靠比較比例；請先確認收入。</p>
+          ) : c.remaining >= 0 && c.etfGap === 0 ? (
+            <p>
+              目前沒有現金流赤字或已知投資目標缺口，不因細項比例或非必要分類要求減支。請先確認家庭安全與重要目標，再依生活品質及偏好決定是否調整。
+            </p>
           ) : h.advice.length ? (
             <ol className="health-advice">
               {h.advice.map((a) => (
@@ -261,9 +294,9 @@ export function HouseholdHealth({
                   {new Intl.NumberFormat("zh-TW", {
                     maximumFractionDigits: 2,
                   }).format(a.excessPoints!)}{" "}
-                  個百分點。若將每月{a.name}支出調整至 {money(a.target)}{" "}
-                  元，每月可多保留 {money(a.excess!)} 元，一年可多保留{" "}
-                  {money(a.annual!)} 元。
+                  個百分點。目前有現金流或目標缺口；只有確認此項可調且影響重要目標時，才考慮以下情境，並非必須削減。若將每月
+                  {a.name}支出調整至 {money(a.target)} 元，每月可多保留{" "}
+                  {money(a.excess!)} 元，一年可多保留 {money(a.annual!)} 元。
                 </li>
               ))}
             </ol>

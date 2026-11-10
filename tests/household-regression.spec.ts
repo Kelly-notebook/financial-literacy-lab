@@ -122,6 +122,7 @@ test("雙向購買模式、目的分類與購物／旅行切片分開", async ({
 test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByLabel("每月固定實領薪資").fill("100000");
+  await ui.getByLabel("參考預算模式").selectOption("classic");
 
   const necessary = ui.getByRole("group", {
     name: "必要生活支出",
@@ -155,10 +156,10 @@ test("新增支出預設分類、生活費順序與CFPB顏色／文字邊界", a
   await ui.getByLabel("伙食", { exact: true }).fill("46000");
   await expect(ui.locator('[data-group="needs"]')).toHaveAttribute(
     "data-tone",
-    "pink",
+    "watch",
   );
   await expect(ui.locator('[data-group="needs"]')).toContainText(
-    "超出參考值 6 個百分點",
+    "高於參考目標 6 個百分點",
   );
   await ui.getByLabel("餐廳與日常娛樂", { exact: true }).fill("35000");
   await expect(ui.locator('[data-group="wants"]')).toHaveAttribute(

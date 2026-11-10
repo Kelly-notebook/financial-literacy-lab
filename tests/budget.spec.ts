@@ -261,6 +261,8 @@ test("電信與訂閱同步現金流、健檢明細情境與參考上限可修�
   await ui.getByLabel("電信費", { exact: true }).fill("4000");
   await ui.getByLabel("工具與娛樂訂閱", { exact: true }).fill("6000");
   await ui.getByText("家庭收支健檢與投資規劃", { exact: true }).click();
+  await expect(ui.locator(".health-advice li")).toHaveCount(0);
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("80000");
   await expect(
     ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
   ).toContainText("18%");
@@ -270,6 +272,8 @@ test("電信與訂閱同步現金流、健檢明細情境與參考上限可修�
   await expect(
     ui.locator(".health-advice li").filter({ hasText: "伙食支出占收入" }),
   ).toContainText("36,000");
+  await ui.getByLabel("每月預計投入 ETF 金額").fill("0");
+  await expect(ui.locator(".health-advice li")).toHaveCount(0);
   await ui.getByRole("button", { name: "必要生活支出 ▾", exact: true }).click();
   await expect(ui.locator(".living-breakdown")).toContainText("4,000");
   await ui.getByRole("button", { name: "非必要消費 ▾", exact: true }).click();

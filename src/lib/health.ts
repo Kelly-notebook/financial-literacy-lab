@@ -1,3 +1,4 @@
+import { budgetModes, type BudgetMode } from "./budgetModes";
 import { bounded } from "./finance";
 import {
   separateExpenseKeys,
@@ -184,32 +185,31 @@ export function detailComparison(
     annual: excess * 12,
   };
 }
-export function groupState(id: Group, ratio: number | null, deficit = false) {
+export function groupState(
+  id: Group,
+  ratio: number | null,
+  deficit = false,
+  mode: BudgetMode = "classic",
+) {
   if (ratio === null)
     return { tone: "unknown", message: "沒有正的稅後收入，暫不判定比例狀態。" };
+  const reference = budgetModes[mode][id];
   if (id !== "savings") {
-    const reference = id === "needs" ? 50 : 30;
     const points = ratio - reference;
     return points > 0
       ? {
-          tone: "pink",
-          message: `超出參考值 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；請依家庭需求檢視，不表示一定能削減。`,
+          tone: deficit ? "pink" : "watch",
+          message: `高於參考目標 ${new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(points)} 個百分點；比例差異本身不是財務風險或減支理由，須先看現金流、安全及重要目標。`,
         }
       : {
           tone: "normal",
-          message: "未超過此項參考上限，仍需依實際家庭需求檢視。",
+          message: "在參考目標內；低於消費比例不是異常，也不需要花完額度。",
         };
   }
-  if (ratio < 10)
+  if (ratio < reference)
     return {
-      tone: "yellow",
-      message:
-        "低於本站 10% 教育性提醒門檻，可先檢視財務緩衝；不代表必須增加 ETF 投入。",
-    };
-  if (ratio < 20)
-    return {
-      tone: "watch",
-      message: "尚未達到 20% 參考目標，可依目標逐步規劃，不使用嚴重警示。",
+      tone: ratio < 10 ? "yellow" : "watch",
+      message: `低於 ${reference}% 參考目標，可檢視退休、儲蓄與其他目標的安排；不是強制儲蓄額度，也不代表必須增加 ETF。${ratio < 10 ? "低於10%僅是教育性提醒，不是財務異常判定。" : ""}`,
     };
   return deficit
     ? {
@@ -219,7 +219,7 @@ export function groupState(id: Group, ratio: number | null, deficit = false) {
       }
     : {
         tone: "green",
-        message: "此項達到 20% 參考目標，不代表整體財務安全已經過驗證。",
+        message: `此項達到 ${reference}% 參考目標；高於目標不是異常，也不代表整體財務安全已經過驗證。`,
       };
 }
 export function healthCheck(
@@ -227,6 +227,7 @@ export function healthCheck(
   income: number,
   categories: Record<string, Group> = {},
   limits: Limits = { ...detailLimits },
+  mode: BudgetMode = "classic",
 ) {
   bounded(income, "稅後月收入", 0, Number.MAX_VALUE);
   Object.values(limits).forEach((v) => bounded(v, "細項參考上限", 0, 100));
@@ -249,8 +250,9 @@ export function healthCheck(
       name: groupNames[id],
       value: sums[id],
       ratio,
-      reference: { needs: 50, wants: 30, savings: 20 }[id],
-      ...groupState(id, ratio, cashDeficit > 0),
+      reference: budgetModes[mode][id],
+      referenceAmount: (income * budgetModes[mode][id]) / 100,
+      ...groupState(id, ratio, cashDeficit > 0, mode),
     };
   });
   const advice = entries

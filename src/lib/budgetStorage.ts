@@ -1,3 +1,4 @@
+import { budgetModeOptions } from "./budgetModes";
 import { parseNumericInput } from "./numberInput";
 import { MAX_MONEY } from "./finance";
 import { livingFields } from "./health";
@@ -14,6 +15,7 @@ const groups = new Set([
 ]);
 const choices: Record<string, string[]> = {
   mode: ["monthly", "annual"],
+  budgetMode: budgetModeOptions.map(([id]) => id),
   livingMode: ["total", "detail"],
   cashTreatment: ["exclude", "spend", "reinvest"],
   view: ["monthly", "annual"],
