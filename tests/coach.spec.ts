@@ -78,6 +78,11 @@ test("三種Prompt複製最新家庭資料，快速／明細與原摘要均正�
       .click();
     const text = await copied();
     expect(text).toContain(phrase);
+    expect(text).toContain("只使用繁體中文純文字");
+    expect(text).toContain("不要產生任何表格、Markdown表格或圖表");
+    expect(text).toContain("自然組成一段或兩段文字");
+    expect(text).toContain("全年收支平衡，不代表每月現金流沒有壓力");
+    expect(text).not.toContain("必要時可使用簡短表格");
     expect(text).toContain(
       "每月家庭稅後可支配收入（規劃用月平均）：NT$ 100,000",
     );

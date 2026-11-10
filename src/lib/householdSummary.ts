@@ -59,7 +59,10 @@ export function householdSummary(
     "\n【收入：實際固定金額與平均月額分列】",
     `薪資模式：${values.mode === "annual" ? "年薪總額（含獎金，不另加）" : "固定月薪＋年度獎金"}`,
     ...(values.mode === "annual"
-      ? [`全年稅後工作總收入：${known("annualIncome", p?.annualIncome)}`]
+      ? [
+          `全年稅後工作總收入：${known("annualIncome", p?.annualIncome)}`,
+          "固定月薪及年度獎金拆分：未提供（年薪總額模式，不使用另存但未採用的月薪／獎金推斷固定月現金流）。",
+        ]
       : [
           `固定月薪（使用者輸入的實際每月實領）：${known("salary", p?.salary)}`,
           `年度獎金：${known("annualBonus", p?.annualBonus)}`,
@@ -72,6 +75,7 @@ export function householdSummary(
     `投資現金收入的年額換算月平均：${p ? amount(p.investmentCash / 12) : "未提供"}；實際配息月份未提供，股息不保證。`,
     `本月計入的投資現金收入（月平均）：${amount(c?.cashMonthly)}；不含未實現資本利得。`,
     `每月家庭稅後可支配收入（規劃用月平均）：${amount(c?.income)}；若輸入稅前收入，需先改為稅後金額。`,
+    "年度獎金實際入帳月份、獎金分配準備金金額與可支應月數：未提供；不能僅憑全年或月平均結餘推定各月實際資金足夠，也不能推定沒有準備金。",
     "\n【生活費：僅採目前有效來源】",
     `有效輸入模式：${values.livingMode === "detail" ? "19 項明細" : "快速輸入總額"}`,
     `每月必要生活支出總額：${amount(lifeGroup("needs"))}`,
@@ -156,6 +160,7 @@ export function householdSummary(
     "\n【未來現金流設定】",
     `預測期間：${values.forecastYears ?? "未提供"} 年。${p?.change ? `自第 ${p.change.month} 個月起工作收入月平均 ${amount(p.change.employmentMonthly)}；必要生活費 ${amount(p.change.necessaryLiving ?? p.change.living)}；非必要消費 ${amount(p.change.discretionaryLiving)}。` : "未設定額外收入／生活費變動，不代表未來不會變化。"}`,
     "現金流不是累積資產；未自動納入年齡、調薪與通膨。購物與旅行月存不假設利息及價格變動。收入與股息月平均不代表實際入帳月份。",
+    "父母實際生活／醫療需求、其他家人分擔、親屬支援的自主程度／家庭期待／人際壓力、法定扶養義務：未提供；孝親費金額或比例不能證明動機或情緒勒索。",
     "資料僅包含預算欄位，未輸出姓名、地址、電話、帳號或自由文字目標名稱。",
   );
   return lines.join("\n");
