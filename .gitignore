@@ -4,3 +4,9 @@ playwright-report/
 test-results/
 *.local
 *.tsbuildinfo
+
+# Local credentials and hosting state must not be committed.
+.env
+.env.*
+!.env.example
+.netlify/

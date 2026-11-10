@@ -2,7 +2,7 @@ name: Quality checks
 on:
   pull_request:
   push:
-    branches: [feat/phase-one-financial-lab]
+    branches: [main, feat/savings-comparison, feat/phase-one-financial-lab]
 permissions:
   contents: read
 jobs:
@@ -15,6 +15,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
